@@ -1,5 +1,5 @@
 ---
-title: "Server Setup: .NET Configuration and Query Endpoint"
+title: Server Setup: .NET Configuration and Query Endpoint
 status: draft
 ---
 
@@ -9,15 +9,8 @@ This guide covers how to set up the FlowerBI server side in a .NET application. 
 
 - How to install and reference the `FlowerBI.Engine` NuGet package
 - How to load your YAML schema at startup
-- How to configure dependency injection for the engine
-- How to wire up a single POST endpoint that accepts client queries and returns results
-- How to enforce row-level security
-
-## Prerequisites
-
-- A .NET 6.0+ or .NET Core 3.1+ project
-- A SQL Server database (or other supported RDBMS – FlowerBI targets SQL Server by default)
-- A FlowerBI YAML schema file (see [YAML Schemas](./yaml.md))
+- How to configure a single POST endpoint that accepts client queries and returns results
+- Best practices for error handling and logging
 
 ## 1. Install FlowerBI.Engine
 
@@ -27,7 +20,7 @@ Add the `FlowerBI.Engine` package to your project via the .NET CLI or Package Ma
 dotnet add package FlowerBI.Engine
 ```
 
-> **Note:** The package is available on NuGet. Ensure you are using a compatible version.
+> **Note:** The package is available on NuGet. Ensure you are using a compatible version. For version 6.x, target .NET 6 or later.
 
 ## 2. Load the Schema and Configure the Connection
 
@@ -37,177 +30,153 @@ Create a configuration section (e.g., `appsettings.json`) with your connection s
 
 ```json
 {
-  "ConnectionStrings": {
-    "FlowerBI": "Server=(localdb)\\mssqllocaldb;Database=MyDb;Trusted_Connection=True;"
+  "FlowerBI": {
+    "ConnectionString": "Server=.;Database=MyDb;Trusted_Connection=true;"
   }
 }
 ```
 
-In your `Program.cs`, read the schema file and register the engine:
+Then, in your `Startup.cs` or `Program.cs` (depending on your .NET version), load the schema and register the `QueryExecutor` as a singleton:
 
 ```csharp
 using FlowerBI.Engine;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load the YAML schema (adjust path as needed)
-var schemaYaml = File.ReadAllText("schema.yaml");
-var schema = Schema.FromYaml(schemaYaml);
+// Load schema from YAML file (e.g., schema.yaml)
+var yaml = File.ReadAllText("schema.yaml");
+var schema = Schema.FromYaml(yaml);
 
-// Register the schema as a singleton
-builder.Services.AddSingleton(schema);
-
-// Register a factory for creating DbConnection (using SqlClient)
-builder.Services.AddTransient<IDbConnection>(sp =>
-    new SqlConnection(builder.Configuration.GetConnectionString("FlowerBI")));
-
-// Register the QueryEngine (transient is safe; it is stateless)
-builder.Services.AddTransient<QueryEngine>();
-
-var app = builder.Build();
-```
-
-## 3. Wire the Single POST Query Endpoint
-
-FlowerBI exposes a single endpoint that accepts a JSON body conforming to `QueryJson` and returns a `QueryResultJson`. The minimal API approach is straightforward:
-
-```csharp
-app.MapPost("/query", async (QueryJson query, QueryEngine engine, IDbConnection db) =>
+// Register the executor with the schema and connection string
+builder.Services.AddSingleton(sp => 
 {
-    // Execute the query and return the result
-    var result = await engine.ExecuteAsync(db, query);
-    // QueryEngine.ExecuteAsync returns a QueryResultJson (serializable to the client)
-    return Results.Ok(result);
+    var config = sp.GetRequiredService<IConfiguration>();
+    var connectionString = config.GetConnectionString("FlowerBI:ConnectionString");
+    return new QueryExecutor(schema, connectionString);
 });
+
+// Add controllers
+builder.Services.AddControllers();
+// ... other service configuration
 ```
 
-If you prefer a controller, create a `QueryController`:
+> **Note:** The YAML file should be placed in the project root and set to copy to output directory. See the [YAML Schema documentation](./yaml.md) for schema syntax.
+
+## 3. Create the Query Endpoint
+
+Create a controller (e.g., `QueryController`) with a single POST action that deserializes the client's JSON query, executes it via `QueryExecutor`, and returns the result.
 
 ```csharp
+using FlowerBI.Engine;
+using Microsoft.AspNetCore.Mvc;
+
 [ApiController]
-[Route("[controller]")]
+[Route("api/query")]
 public class QueryController : ControllerBase
 {
+    private readonly QueryExecutor _executor;
+
+    public QueryController(QueryExecutor executor)
+    {
+        _executor = executor;
+    }
+
     [HttpPost]
-    public async Task<ActionResult<QueryResultJson>> Post([FromBody] QueryJson query,
-        [FromServices] QueryEngine engine,
-        [FromServices] IDbConnection db)
+    public async Task<IActionResult> Post([FromBody] FlowerBI.Query query)
     {
-        var result = await engine.ExecuteAsync(db, query);
-        return Ok(result);
+        try
+        {
+            var result = await _executor.ExecuteQueryAsync(query);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            // Log error and return appropriate HTTP status
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 }
 ```
 
-Register the controller in `Program.cs`:
+The `FlowerBI.Query` type is defined in the `FlowerBI.Engine` package. It matches the JSON structure sent by the client (e.g., fields like `select`, `aggregations`, `filters`).
 
-```csharp
-builder.Services.AddControllers();
-// ...
-app.MapControllers();
-```
+## 4. Client-side `fetch` Function
 
-## 4. What FlowerBI.Engine Does Internally
+On the client side, define a function that POSTs the query JSON to your endpoint. This example uses the browser's `fetch` API:
 
-When you call `engine.ExecuteAsync(db, query)`:
+```typescript
+import { QueryJson, QueryResultJson } from "flowerbi";
 
-1. **Parses the client query** (JSON with `select`, `aggregations`, `filters`, etc.)
-2. **Resolves columns and tables** against the loaded schema
-3. **Generates SQL** – builds the appropriate `SELECT`, `JOIN`, `GROUP BY`, `WHERE`, and `ORDER BY` clauses
-4. **Executes the SQL** against the provided `IDbConnection`
-5. **Transforms the results** into a `QueryResultJson` object (a list of records with strongly typed fields)
-
-The engine never executes raw SQL from the client – only SQL it constructs based on the schema. This gives you full control over what columns and tables are accessible.
-
-## 5. Adding Row-Level Security
-
-The engine allows you to inject additional filters right before execution. This is useful for per-user authorization.
-
-First, inject a service that determines the user's restrictions:
-
-```csharp
-public interface IUserContext
-{
-    int TenantId { get; }
-}
-
-// Example implementation reading from HttpContext
-public class HttpUserContext : IUserContext
-{
-    private readonly IHttpContextAccessor _accessor;
-    public HttpUserContext(IHttpContextAccessor accessor)
-    {
-        _accessor = accessor;
-    }
-
-    public int TenantId =>
-        int.Parse(_accessor.HttpContext.User.FindFirst("tenant")?.Value ?? "0");
-}
-```
-
-Then, before calling `ExecuteAsync`, amend the query:
-
-```csharp
-app.MapPost("/query", async (QueryJson query, QueryEngine engine, IDbConnection db,
-    IUserContext user) =>
-{
-    // Add a filter to restrict to the user's tenant
-    query.Filters.Add(new Filter
-    {
-        Column = "Tenant.Id",
-        Operator = "=",
-        Value = user.TenantId
+export async function myFetch(queryJson: QueryJson): Promise<QueryResultJson> {
+    const response = await fetch("http://localhost:5000/api/query", {
+        method: "POST",
+        cache: "no-cache",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(queryJson),
     });
 
-    var result = await engine.ExecuteAsync(db, query);
-    return Results.Ok(result);
-});
+    if (!response.ok) {
+        throw new Error(`Query failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
 ```
 
-## 6. Full Example Program.cs (Minimal API)
+This function can then be passed to `useQuery` (from `flowerbi-react`) or used directly with the core `executeQuery` function.
+
+## 5. Security Considerations
+
+- **Row-level security:** Add extra filters to the query inside the endpoint before execution, based on the authenticated user. The `QueryExecutor` accepts an optional `additionalFilters` parameter.
+- **Restrict schema:** The server controls which tables/columns are exposed. Only those defined in the YAML schema can be queried.
+- **Validate input:** Always validate the incoming query structure. The `FlowerBI.Engine` will reject malformed queries, but you may want to add early validation.
+
+Example of adding row-level filters:
 
 ```csharp
-using FlowerBI.Engine;
-using System.Data;
-using System.Data.SqlClient;
-
-var builder = WebApplication.CreateBuilder(args);
-
-// Load schema
-var schemaYaml = File.ReadAllText("schema.yaml");
-var schema = Schema.FromYaml(schemaYaml);
-builder.Services.AddSingleton(schema);
-
-// Database connection
-builder.Services.AddTransient<IDbConnection>(sp =>
-    new SqlConnection(builder.Configuration.GetConnectionString("FlowerBI")));
-
-// Engine
-builder.Services.AddTransient<QueryEngine>();
-
-// User context (optional)
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IUserContext, HttpUserContext>();
-
-var app = builder.Build();
-
-app.MapPost("/query", async (QueryJson query, QueryEngine engine, IDbConnection db,
-    IUserContext user) =>
+var userId = HttpContext.User.FindFirst("UserId")?.Value;
+var extraFilters = new List<Filter>
 {
-    // Apply row-level security
-    query.Filters.Add(new Filter { Column = "Tenant.Id", Operator = "=", Value = user.TenantId });
-
-    var result = await engine.ExecuteAsync(db, query);
-    return Results.Ok(result);
-});
-
-app.Run();
+    new Filter("Tenant.TenantId", FilterOperator.Equal, userId)
+};
+var result = await _executor.ExecuteQueryAsync(query, extraFilters);
 ```
 
-## 7. Next Steps
+## 6. Error Handling and Logging
 
-- See [YAML Schemas](./yaml.md) for how to define your schema
-- See [Documenting your schema](./documentation.md) for adding metadata
-- Explore the [Client-Side Fetch](./flowerbi/examples/client-fetch.md) to see how the client POSTs the query JSON
+Wrap the `ExecuteQueryAsync` call in a try-catch and log exceptions. Common errors include:
+- Invalid schema references in the query
+- Missing or malformed YAML schema
+- Database connection failures
 
-For more advanced topics (virtual tables, conjoint tables, many-to-many), refer to the respective documentation pages.
+Use structured logging (e.g., with Serilog) to capture request details without exposing sensitive data.
+
+## 7. Testing Your Endpoint
+
+You can test the endpoint using a tool like curl or Postman:
+
+```json
+POST /api/query
+Content-Type: application/json
+
+{
+  "select": ["Customer.CustomerName"],
+  "aggregations": [
+    {
+      "column": "Bug.Id",
+      "function": "Count"
+    }
+  ],
+  "filters": []
+}
+```
+
+The response will be a JSON object with `columns` and `rows` properties, as defined by `QueryResultJson`.
+
+## Next Steps
+
+- See the [YAML Schemas documentation](./yaml.md) for defining your data model.
+- See [Virtual Tables](./virtual-tables.md) for handling multiple uses of the same dimension.
+- See [Documenting your schema](./documentation.md) for adding metadata to columns and tables.
+
+For a full working example, refer to the [FlowerBI GitHub repository](https://github.com/danielearwicker/flowerbi) and the `Demo` project under `server/dotnet/Demo/`.
