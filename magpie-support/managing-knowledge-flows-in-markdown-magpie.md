@@ -5,9 +5,9 @@ status: draft
 
 # Managing Knowledge Flows in Markdown Magpie
 
-Knowledge flows are the core pipeline that connects your raw documentation sources to a curated knowledge base. They define **what** content is read, **how** it is processed, and **where** the resulting knowledge is stored and served. This guide explains how to set up, configure, and manage knowledge flows as a customer of Markdown Magpie.
+Knowledge flows are the core pipeline that connects your raw documentation sources to a curated knowledge base. They define **what** content is read, **how** it is processed, and **where** the resulting knowledge is stored and served. This guide covers setting up flows, indexing content, managing documents, and maintaining the knowledge base over time.
 
-## Overview
+## Understanding Flows
 
 A knowledge flow is a named pipeline that links one or more **sources** (where your raw Markdown lives) to a **destination** (the curated repository that Magpie searches and maintains). The flow is used by the system to:
 
@@ -15,47 +15,80 @@ A knowledge flow is a named pipeline that links one or more **sources** (where y
 - Index the destination repository for answering questions.
 - Propose and publish updates to the destination when gaps are detected.
 
-You manage flows through environment variables and the HTTP API / web console.
+| Concept | Description |
+|---------|-------------|
+| **Source** | A read‑only location of raw Markdown (e.g., your project’s code repository, an internet URL, or an agent knowledge folder). |
+| **Destination** | The repository where reviewed, final Markdown lives. This is what Magpie indexes for retrieval and answering. |
+| **Flow** | A named connection between sources and a destination. Magpie monitors sources for changes and updates the destination accordingly. |
 
 ## Configuring a Knowledge Flow
 
-Flows are defined via the environment variable `KNOWLEDGE_FLOWS`. Each flow has an ID, a display name, a list of source IDs, and a destination ID. Sources and destinations are defined separately:
+Flows are defined in the environment variables `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS`. These are set in the `.env` file (or passed to containers).
+
+### Required: Checkout Root
 
 ```env
 MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+```
 
+This is the local directory where remote repositories are cloned. Create it if it doesn’t exist.
+
+### Define Sources
+
+Use `KNOWLEDGE_SOURCES` as a JSON array. Each source has at minimum an `id` and `name`. The `kind` determines how it is accessed.
+
+```env
 KNOWLEDGE_SOURCES=[
-  {"id":"flowerbi-code","name":"FlowerBI Source Code","kind":"git","url":"https://github.com/example/flowerbi.git","subpath":"src"},
+  {"id":"flowerbi-src","name":"FlowerBI Source","kind":"git","url":"https://github.com/example/flowerbi.git","subpath":"src"},
   {"id":"external-guide","name":"External Guide","kind":"internet","url":"https://example.com/guide.md"}
-]
-
-KNOWLEDGE_DESTINATIONS=[
-  {"id":"flowerbi-docs","name":"FlowerBI Docs","kind":"git","url":"https://github.com/example/flowerbi-docs.git","subpath":"docs"}
-]
-
-KNOWLEDGE_FLOWS=[
-  {"id":"flowerbi","name":"FlowerBI Knowledge Base","sourceIds":["flowerbi-code","external-guide"],"destinationId":"flowerbi-docs"}
 ]
 ```
 
-### Supported Source Kinds
+Supported source kinds:
+- `local` – a folder on the server (e.g., `knowledge-bases/cats`).
+- `git` – a remote Git repository, optionally with a `subpath` to a subfolder.
+- `internet` – a plain HTTP/HTTPS URL that returns Markdown.
+- `agent` – the agent’s own knowledge (no URL needed).
 
-- `local` – a folder on the server (e.g., `"path":"knowledge-bases/cats"`)
-- `git` – a remote Git repository, optionally with a `subpath` to a subfolder
-- `internet` – a plain HTTP/HTTPS URL that returns Markdown
-- `agent` – the agent’s own knowledge (no URL needed)
+### Define Destinations
 
-### Supported Destination Kinds
+Use `KNOWLEDGE_DESTINATIONS` as a JSON array. Each destination must have an `id`, `name`, and `url` (Git remote).
 
-Destinations are always writable Git repositories that Magpie will publish proposals and edits to. They must be Git repositories configured with push access.
+```env
+KNOWLEDGE_DESTINATIONS=[
+  {"id":"flowerbi-docs","name":"FlowerBI Docs","url":"https://github.com/example/flowerbi-docs.git","subpath":"docs"}
+]
+```
 
-### Legacy Configuration
+Destinations are always writable Git repositories that Magpie will publish proposals and edits to.
 
-If `KNOWLEDGE_SOURCES` and `KNOWLEDGE_DESTINATIONS` are not set, the system falls back to the older `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` variables. New deployments should use the flow-based configuration.
+### Define Flows
+
+Use `KNOWLEDGE_FLOWS` to link sources to a destination. A flow includes a `sourceIds` array and a `destinationId`.
+
+```env
+KNOWLEDGE_FLOWS=[
+  {"id":"flowerbi","name":"FlowerBI Knowledge Base","sourceIds":["flowerbi-src","external-guide"],"destinationId":"flowerbi-docs"}
+]
+```
+
+For backwards compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still accepted when `KNOWLEDGE_SOURCES`/`KNOWLEDGE_DESTINATIONS` are not set.
+
+### Add Embeddings (Optional but Recommended)
+
+To enable hybrid retrieval, configure an embedding provider:
+
+```env
+KNOWLEDGE_STORE=postgres
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
+OPENAI_COMPATIBLE_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
+OPENAI_COMPATIBLE_API_KEY=sk-...
+```
 
 ## Indexing a Flow
 
-Once a flow is configured, you must index its destination so Magpie can answer questions from it. Indexing parses the Markdown, splits it into sections, and stores them for retrieval.
+Once a flow is configured, you must index its destination before users can ask questions. Indexing parses Markdown files, extracts sections, and (optionally) generates embeddings.
 
 ### Using the API
 
@@ -65,11 +98,24 @@ curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
   -d '{"flowId":"flowerbi"}'
 ```
 
-This indexes the destination repository of the flow with ID `flowerbi`. The API returns a summary including document and section counts.
+This indexes only the **destination** of the flow. The response includes the number of documents and sections indexed:
+
+```json
+{
+  "repository": "flowerbi-docs",
+  "documentCount": 12,
+  "sectionCount": 48,
+  "commitSha": "abc123"
+}
+```
 
 ### Using the Web Console
 
 Navigate to **Knowledge > Repositories** in the web console. Click the **Index** button next to your flow to trigger indexing.
+
+### After Indexing
+
+The API automatically runs background embedding for any section whose vector is missing. In `direct` mode, questions are answered synchronously. In `queue` mode, a watcher must be running to process answer jobs.
 
 ## Viewing Flow Status
 
@@ -83,28 +129,169 @@ Navigate to **Knowledge > Repositories** in the web console. Click the **Index**
 
 The **Knowledge** page shows each flow’s index status, including last indexed commit and counts.
 
-## Managing Sources and Destinations Over Time
+## Managing Documents in the Knowledge Base
 
-To add, remove, or modify flows, update the environment variables and restart the API. The system will re-sync Git repositories on every startup. For runtime changes without restart, you can use `/api/config` to reload configuration, but this is primarily for AI provider switching. Changes to flow definitions currently require a restart.
+The knowledge base is the indexed corpus used to answer questions. Documents are sourced from configured flows and stored in a Git-backed destination repository.
 
-## Source Change Synchronisation
+### Adding Documents
 
-Magpie includes a background scheduler task called `source-change-sync` that watches each flow’s Git sources and automatically rewrites knowledge-base documents when a source change has gone out of date. This runs every 10 minutes by default. You can adjust the interval via the Crunch settings page.
+New documents are added by **including them in the destination repository** and then re-indexing. Magpie does not provide a separate “upload” endpoint; instead, you:
 
-## Next Steps
+1. Add your Markdown file(s) to the destination repository (either directly via Git or through a proposal/pull request).
+2. Run the index command to make Magpie aware of them.
 
-- **Ask questions** against your indexed flow using `POST /api/ask` or the `kb.ask` MCP tool.
-- **View gaps** in your knowledge base with `GET /api/gaps/candidates` or the Gaps page in the web console.
-- **Trigger Crunch** to consolidate or split documents by using `POST /api/crunch/run`.
-- **Manage proposals** – once gaps are identified, you can generate proposals and publish them as pull requests to your destination repository.
+#### Adding via Git (manual)
+
+Edit the destination repository locally or push a new branch:
+
+```bash
+# Navigate to the checkout (e.g., inside MAGPIE_CHECKOUT_ROOT/<destination-id>)
+cd /path/to/magpie-checkouts/flowerbi-docs
+# Add a new file
+echo '# New Topic' > docs/new-topic.md
+git add docs/new-topic.md
+git commit -m "Add new-topic.md"
+git push
+```
+
+#### Adding via a Proposal (recommended for gaps)
+
+When the gap detector finds missing knowledge, the recommended workflow is:
+
+1. A gap cluster appears via `GET /api/gaps/clusters`.
+2. Generate a proposal from that cluster (either manually or via the scheduled reconciler).
+3. The proposal drafts a Markdown document, commits it to a branch, and opens a pull request.
+4. After review and merge, the new document is part of the destination.
+
+### Removing Documents
+
+To remove a document, you must **delete the file from the destination repository** and then re-index. There is no dedicated API to delete a single indexed section; the index is built from the repository’s current file set.
+
+1. Delete the Markdown file from the destination checkout:
+
+```bash
+cd /path/to/magpie-checkouts/flowerbi-docs
+rm docs/unwanted-topic.md
+git commit -am "Remove unwanted-topic.md"
+git push
+```
+
+2. Re-index the flow:
+
+```bash
+curl -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"flowerbi"}'
+```
+
+After re-indexing, the deleted document no longer appears in search results or answer citations.
+
+#### Removing Multiple Documents
+
+Batch deletions work the same way — remove several files, commit, push, and re-index once.
+
+#### Removing Documents via Proposals
+
+If a document has become obsolete or inconsistent, you can also create a **Crunch** proposal that includes file deletions. Crunch is a scheduled or on-demand maintenance pass that can consolidate, split, or delete documents. After the Crunch plan is published and merged, the deletions take effect.
+
+## Keeping Flows Updated
+
+### Source Change Sync
+
+The `source-change-sync` background job (scheduled by default every 10 minutes) watches each flow's git sources. When a source has new commits, it rewrites the corresponding destination documents and re-indexes them. You can disable this in the Crunch settings page if you prefer manual control.
+
+### Manual Re-index
+
+To force a re-index of a flow (e.g., after changing destination documents by hand), call:
+
+```bash
+curl -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"my-flow"}'
+```
+
+### Resetting and Full Re-index
+
+For demos or clean slates, the `/api/admin/reset` endpoint clears all indexed data and re-syncs + re-indexes all configured flows:
+
+```bash
+curl -X POST http://localhost:4000/api/admin/reset
+```
+
+**Warning:** This is destructive and unauthenticated; never expose it in production.
+
+## The Gap Pipeline and Flows
+
+Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
+1. Groups related gaps into clusters.
+2. Drafts Markdown proposals that fill those gaps.
+3. Publishes them to a Git branch in the flow's destination repository.
+4. Opens a pull request (if a token for the remote host is configured) and advances the proposal as the PR is merged.
+
+Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
+
+## Crunch: Scheduled Knowledge Base Tidying
+
+A separate **Crunch** flow runs on a per-flow schedule. It analyses the destination documents, identifies opportunities to split large files or consolidate scattered content, and builds a plan. After operator review, the plan can be published as a branch.
+
+```bash
+# Trigger crunch now for a flow
+curl -X POST http://localhost:4000/api/crunch/run \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"flowerbi"}'
+
+# List recent runs
+curl -s http://localhost:4000/api/crunch/runs
+
+# Publish a completed crunch plan
+curl -X POST http://localhost:4000/api/crunch/runs/:id/publish
+```
+
+## Verifying the Knowledge Base State
+
+After any index operation, query the stats endpoint to confirm changes:
+
+```bash
+curl -s http://localhost:4000/api/knowledge/stats
+# {"repositoryCount":1,"documentCount":15,"sectionCount":72}
+```
+
+List all indexed documents:
+
+```bash
+curl -s http://localhost:4000/api/knowledge/documents
+```
+
+## Best Practices
+
+- Use separate git repositories for sources and destinations to control access and review cycles.
+- Keep the destination repository human‑readable: it is the authoritative knowledge base for your customers.
+- If a flow has no sources (e.g., you write documentation directly in the destination repo), omit `sourceIds` and let the gap pipeline propose changes from user questions alone.
+- Monitor the `GET /api/gaps/clusters` endpoint to see which missing topics are most frequently asked.
+- For production deployments, configure `GITHUB_TOKEN` (or equivalent) so proposals automatically become pull requests.
+- Use descriptive, unique headings that summarize section content.
+- Keep sections focused on a single topic.
+- Avoid extremely long sections; break them into smaller, well-named subsections.
 
 ## Troubleshooting
 
-- **Flow not appearing in stats** – Make sure the flow ID is defined in `KNOWLEDGE_FLOWS` and that you have indexed it.
-- **Index fails** – Check that the destination repository URL is accessible and that `MAGPIE_CHECKOUT_ROOT` is writable.
-- **No answers returned** – Confirm that indexing completed successfully and that the retrieval mode is active (check `GET /api/config` for `retrieval.mode`).
-- **PRs not being created** – You may need to set `GITHUB_TOKEN` or equivalent Git host token for automatic publishing.
+| Symptom | Likely Cause | Remedy |
+|---|---|---|
+| `/api/ask` returns low confidence | Destination not indexed or embeddings missing | Re-index the flow and check embedding configuration. |
+| Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `pull-request-refresh` scheduler is running. |
+| Crunch plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
+| Web console shows no flows | Environment variables not set | Verify `KNOWLEDGE_FLOWS` in `.env` and restart the API. |
+| Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
+| New document not found in search | Index did not run after adding the file | Run index endpoint again. |
+| Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |
+| “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS`. |
+| Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API. |
+| “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions. |
+| Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set. |
+| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process. |
 
----
+## Reference
 
-*For detailed API reference, see the [HTTP API documentation](docs/api.md). For ingestion specifics, see [Markdown Ingestion](docs/ingestion.md).*
+- [HTTP API Reference](integrations-and-connecting-data-sources.md) — endpoints for managing flows, indexing, and proposals.
+- [Ingestion Configuration](integrations-and-connecting-data-sources.md) — detailed configuration of sources, destinations, and flows.
+- [Architecture Overview](integrations-and-connecting-data-sources.md) — the product loop and how flows fit in.

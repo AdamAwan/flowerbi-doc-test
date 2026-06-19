@@ -8,7 +8,7 @@ review_cycle_days: 90
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
-This guide explains how to get your content into Markdown Magpie so it can answer questions with citations, detect knowledge gaps, and propose improvements. You will:
+This guide explains how to get your Markdown content into Markdown Magpie so it can answer questions with citations, detect knowledge gaps, and propose improvements. You will:
 
 - Set up a local development environment.
 - Configure knowledge sources and destinations.
@@ -20,6 +20,11 @@ This guide explains how to get your content into Markdown Magpie so it can answe
 - Node.js 22+ and npm 10 (if npm 11 fails, use `npx --yes npm@10 ci`).
 - Docker and Docker Compose (for Postgres and Redis).
 - A Git repository with Markdown files you want to manage.
+- The HTTP API (`@magpie/api`) on port 4000.
+- A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
+- (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
+
+If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
 
 ## 1. Clone and Install
 
@@ -51,7 +56,7 @@ AI_EXECUTION_MODE=direct
 AI_PROVIDER=mock
 ```
 
-> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](../chat-providers.md).
+> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
 
 ## 3. Start Dependencies (Postgres + Redis)
 
@@ -74,22 +79,54 @@ npm run db:migrate
 
 ## 5. Configure Knowledge Flows
 
-Markdown Magpie uses **knowledge flows** to describe which Git repositories act as raw sources and which destination repository holds the curated knowledge base.
+Markdown Magpie uses **knowledge flows** to describe which Git repositories act as raw sources and which destination repository holds the curated knowledge base. Flows link **sources** (where raw Markdown originates) to a **destination** (the curated KB that gets indexed for answers).
 
-Edit `.env` to define at least one flow, for example using the bundled cats knowledge base:
+### Sources
+
+A **source** is where raw Markdown originates. Supported kinds are:
+
+- `local` – a folder on the server (e.g., a bundled knowledge base).
+- `git` – a remote Git repository.
+- `agent` – a knowledge base maintained by an agent (no external URL).
+- `internet` – a public URL (Markdown fetched on demand).
+
+Example source configuration:
+
+```env
+KNOWLEDGE_SOURCES=[{"id":"cats","name":"Cat Care Repo","kind":"local","path":"knowledge-bases/cats"}]
+```
+
+### Destinations
+
+A **destination** is the curated knowledge base that Magpie indexes for answering questions. It is typically a Git repository where reviewed proposals will be submitted as pull requests.
+
+Example destination:
+
+```env
+KNOWLEDGE_DESTINATIONS=[{"id":"cats-docs","name":"Cat Care Docs","url":"https://github.com/your-org/cats-docs.git","subpath":"docs"}]
+```
+
+### Flows
+
+A **flow** links one or more sources to a destination. This tells Magpie which sources to use for drafting updates to the destination KB.
+
+```env
+KNOWLEDGE_FLOWS=[{"id":"cats","name":"Cat Care KB","sourceIds":["cats"],"destinationId":"cats-docs"}]
+```
+
+For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported but the explicit source/destination/flow model is preferred.
+
+Make sure `MAGPIE_CHECKOUT_ROOT` points to a writable directory where cloned repositories will be stored:
 
 ```env
 MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
-KNOWLEDGE_SOURCES=[{"id":"cats-src","name":"Cats Source","kind":"local","path":"knowledge-bases/cats"}]
-KNOWLEDGE_DESTINATIONS=[{"id":"cats-docs","name":"Cats Docs","kind":"local","path":"knowledge-bases/cats"}]
-KNOWLEDGE_FLOWS=[{"id":"cats","name":"Cats KB","sourceIds":["cats-src"],"destinationId":"cats-docs"}]
 ```
 
-> **Explanation:** The source (`cats-src`) is the raw document folder; the destination (`cats-docs`) is the curated KB that will be indexed for question answering. For a simple setup, both can point to the same folder. See [ingestion.md](../ingestion.md) for full configuration options.
+The API will clone or fast‑forward pull remote sources and destinations into this directory at startup.
 
 ## 6. Start the API
 
-Override `MAGPIE_CHECKOUT_ROOT` to a writable local path so the API can clone repositories on startup:
+Start the API (and database, if not already running). The API will clone or fast‑forward the configured sources and destinations during startup.
 
 ```bash
 mkdir -p .magpie/checkouts
@@ -111,7 +148,15 @@ curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
   -d '{"flowId":"cats"}'
 ```
 
-If using the bundled cats data, you should see output like:
+The API will:
+
+1. Walk the destination repository for `.md` files (ignoring `.git` and `node_modules`).
+2. Parse frontmatter and split documents into heading‑based sections.
+3. Store sections in the in‑memory search index and persist them to Postgres.
+4. Kick off a background task to embed any sections whose embedding is `NULL` (if an embeddings provider is configured).
+
+The POST request returns a summary:
+
 ```json
 {
   "repository": "cats",
@@ -131,6 +176,14 @@ Check that your documents are indexed:
 curl -s http://localhost:4000/api/knowledge/stats
 ```
 
+```json
+{
+  "repositoryCount": 1,
+  "documentCount": 8,
+  "sectionCount": 32
+}
+```
+
 Search for a term:
 
 ```bash
@@ -145,6 +198,8 @@ curl -s http://localhost:4000/api/ask \
   -d '{"question":"How should I introduce a new cat food?"}'
 ```
 
+You should receive an answer with citations and a confidence rating.
+
 ## 9. (Optional) Start the Web Console
 
 In a separate terminal, start the Next.js web app:
@@ -155,10 +210,32 @@ MAGPIE_DEV_API_PROXY="http://localhost:4000" npm run dev:web
 
 Open `http://localhost:3000` to browse the knowledge base, view questions, and manage proposals.
 
+## Embedding Configuration (Optional)
+
+For hybrid retrieval (vector + keyword), configure an embeddings provider **independently** of the chat provider. The following sets work:
+
+**OpenAI‑compatible** (e.g., OpenAI, DeepSeek, local vLLM):
+
+```env
+OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
+OPENAI_COMPATIBLE_API_KEY=sk-...
+OPENAI_COMPATIBLE_EMBEDDING_MODEL=text-embedding-3-small
+```
+
+**Azure OpenAI**:
+
+```env
+AZURE_OPENAI_ENDPOINT=https://myinstance.openai.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
+```
+
+Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a complete set of embedding credentials is present. The model must output 1536‑dimensional vectors to be compatible with the existing vector index.
+
 ## Important Details
 
 - **Indexing is idempotent.** Running it multiple times updates rather than duplicates.
-- **Embeddings are computed in the background** if an embedding provider is configured. See [Embedding Configuration](../ingestion.md#embedding-configuration).
+- **Embeddings are computed in the background** if an embedding provider is configured.
 - **Retrieval mode** is `keyword` by default. To enable hybrid (keyword + vector) search, configure Postgres with pgvector and an embedding provider.
 - **Destinations are local by default** but can point to remote Git repositories. The API clones them into `MAGPIE_CHECKOUT_ROOT` on startup.
 
@@ -170,17 +247,20 @@ Open `http://localhost:3000` to browse the knowledge base, view questions, and m
 | Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
+| “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
+| Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
 
 ## Next Steps
 
-- Learn about [knowledge gap detection and proposals](../question-logging.md).
-- Set up [real AI providers](../chat-providers.md) instead of `mock`.
-- Configure automated [Crunch](../ai-jobs.md#crunch) for knowledge base tidying.
+- Learn about [knowledge gap detection and proposals](managing-knowledge-flows-in-markdown-magpie.md#the-gap-pipeline-and-flows).
+- Set up [real AI providers](integrations-and-connecting-data-sources.md#ai-provider-integrations) instead of `mock`.
+- Configure automated [Crunch](managing-knowledge-flows-in-markdown-magpie.md#crunch-scheduled-knowledge-base-tidying) for knowledge base tidying.
+- Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
 
 ---
 
 **References**
 - [Repository README](../../README.md) – full local development instructions.
-- [Markdown Ingestion](../ingestion.md) – detailed source/destination/flow configuration.
-- [HTTP API Reference](../api.md) – all API endpoints for indexing and searching.
-- [Architecture](../architecture.md) – high-level system design and provider strategy.
+- [Markdown Ingestion](managing-knowledge-flows-in-markdown-magpie.md) – detailed source/destination/flow configuration.
+- [HTTP API Reference](managing-knowledge-flows-in-markdown-magpie.md#api-endpoints) – all API endpoints for indexing and searching.
+- [Architecture](managing-knowledge-flows-in-markdown-magpie.md) – high-level system design and provider strategy.
