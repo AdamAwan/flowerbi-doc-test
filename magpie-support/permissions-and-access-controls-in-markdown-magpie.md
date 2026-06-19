@@ -1,0 +1,97 @@
+---
+title: Permissions and Access Controls in Markdown Magpie
+status: draft
+---
+
+# Permissions and Access Controls in Markdown Magpie
+
+Markdown Magpie does not enforce authentication or authorization by default in local development. In production and managed deployments, access controls are optional and configured via environment variables. The system supports both a simple API‑wide authentication mode and a more granular per‑tool permission model for the MCP server.
+
+## Authentication Architecture
+
+Authentication is provided by the `@magpie/auth` package, which validates JSON Web Tokens (JWTs) against an external OpenID Connect provider. The default and recommended identity provider is Auth0 (or Microsoft Entra ID for Azure deployments).
+
+- **Auth0 configuration** – When `AUTH_REQUIRED=true`, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`).
+- **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
+- **Local development** – With `AUTH_REQUIRED=false` (the default), no token is required. All endpoints are open.
+
+## API‑Level Access Control
+
+The HTTP API (port 4000) currently delegates all permission decisions to the application layer. In the current implementation:
+
+- Most endpoints are **unauthenticated** – they accept any request. The `POST /api/admin/reset` endpoint is explicitly documented as unauthenticated and destructive, and it must not be exposed in production ([api.md](docs/api.md)).
+- The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow” ([architecture.md](docs/architecture.md)), but concrete permission checks are not yet implemented for every operation.
+- Planned improvements include role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware.
+
+## MCP Server Access Control (Granular Permissions)
+
+The MCP server (`apps/mcp`) supports a more mature permission model when authentication is enabled. This is the primary surface for agent‑driven access.
+
+### Transport‑Specific Authentication
+
+- **stdio transport** – The server authenticates to the API using a single service token (`MCP_AUTH_TOKEN`). If `AUTH_REQUIRED=true` and the token is missing, the server fails fast at startup.
+- **Streamable HTTP transport** – The server acts as an OAuth protected resource. It exposes protected‑resource metadata at `/.well-known/oauth-protected-resource` and requires a valid bearer token on every request to the `/mcp` endpoint. Tokens are validated locally against the Auth0 JWKS and are never forwarded to the API. Instead, the HTTP server uses its own machine‑to‑machine credential (`MCP_API_AUTH_TOKEN`) for downstream API calls.
+
+### Per‑Tool Scopes (HTTP Transport)
+
+Each MCP tool requires a specific OAuth scope. The token presented by the client must contain the necessary scope claim. The current mapping is:
+
+| Tool | Required Scope |
+|------|----------------|
+| `kb.search` | `read:knowledge` |
+| `kb.ask` | `ask:knowledge` |
+| `kb.feedback` | `feedback:questions` |
+
+If the token lacks the required scope, the server returns a `403 Forbidden` response. Tools that do not require special scopes (e.g., `initialize`, `tools/list`) need only a valid token.
+
+### Auth Variables Summary
+
+All authentication variables are shared between the API and MCP server via the `@magpie/auth` package:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AUTH_REQUIRED` | `false` | Enable authentication. |
+| `AUTH0_ISSUER_BASE_URL` | – | Full Auth0 issuer (e.g., `https://your-tenant.eu.auth0.com`). |
+| `AUTH0_DOMAIN` | – | Alternative to issuer base; issuer becomes `https://<domain>/`. |
+| `AUTH0_AUDIENCE` | `https://markdown-magpie.local/api` | API identifier the token must carry. |
+| `AUTH0_JWKS_URI` | Derived from issuer | JWKS endpoint for token validation. |
+| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API. Required when `AUTH_REQUIRED=true`. |
+| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls. Required when `AUTH_REQUIRED=true`. |
+
+## Future Directions
+
+- **Role‑based API access** – The architecture document states that “the API owns permissions … and review workflow.” Future iterations will add role‑based checks (e.g., admin, editor, viewer) to API endpoints such as proposal creation, gap management, and system configuration.
+- **Team and organization support** – Integration with Microsoft Entra ID or Auth0 organizations will allow scoping permissions to specific teams, ensuring that only authorised team members can modify the knowledge base.
+- **Audit logging** – All authentication decisions and permission checks will be logged for compliance and troubleshooting.
+
+## Configuration Examples
+
+### Enable Simple Auth (API + MCP stdio)
+
+```env
+AUTH_REQUIRED=true
+AUTH0_ISSUER_BASE_URL=https://markdown-magpie.auth0.com
+AUTH0_AUDIENCE=https://markdown-magpie.local/api
+MCP_AUTH_TOKEN=eyJhbGci...
+```
+
+### Enable Per‑Tool Scopes (MCP HTTP)
+
+Add the MCP HTTP server service token and ensure the client tokens contain the appropriate scopes. The HTTP server’s own token is used for API calls and does not need scopes.
+
+```env
+AUTH_REQUIRED=true
+MCP_API_AUTH_TOKEN=eyJhbGci...
+# Also set Auth0 issuer and audience as above.
+```
+
+## Summary
+
+- By default Magpie runs with no authentication – suitable for local development and internal demos.
+- In production, enable authentication via Auth0 (or Entra ID) using the `AUTH_REQUIRED` flag.
+- The MCP HTTP server provides granular per‑tool scopes for agent access.
+- The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
+
+---
+
+*This article covers the permissions and access controls available as of the current release. For the most up‑to‑date information, refer to the [docs/mcp.md](docs/mcp.md) and [docs/architecture.md](docs/architecture.md) source files.*
