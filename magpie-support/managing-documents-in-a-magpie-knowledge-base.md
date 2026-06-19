@@ -1,0 +1,112 @@
+---
+title: Managing Documents in a Magpie Knowledge Base
+status: draft
+---
+
+# Managing Documents in a Magpie Knowledge Base
+
+This guide explains how to add, re-index, and remove documents from your Markdown Magpie knowledge base.
+
+Magpie is Git-backed: the knowledge base lives in a Git repository (or a set of configured sources and destinations). Adding or removing documents means editing the repository and then triggering a re-index so Magpie’s search and answer engine picks up the changes.
+
+## Understanding Flows, Sources, and Destinations
+
+Magpie uses *flows* to link raw sources (where knowledge comes from) to a *destination* (the curated knowledge base that is indexed and used to answer questions).
+
+- **Source repositories** contain raw documentation, code comments, or other material. They are not directly indexed for answering.
+- **Destination repositories** hold the reviewed, structured Markdown that forms the answer corpus. Indexing always operates on a destination.
+- **Flows** define which sources feed into which destination.
+
+For example, a flow named `flowerbi` might read from a `flowerbi` source repository and write proposals into a `flowerbi-docs` destination. The destination is the knowledge base you query via `/api/ask` or through the web UI.
+
+> **Tip:** If you are using a simple single-repository setup (legacy `KNOWLEDGE_REPOSITORIES`), that repository is both source and destination.
+
+## Adding Documents
+
+To add a new document to the knowledge base:
+
+1. **Write the Markdown file** with appropriate frontmatter (optional but recommended for metadata like `title`, `status`, `tags`).
+2. **Add the file to the destination repository** – either directly (if you have push access) or by following your team’s contribution workflow (e.g., a pull request).
+3. **Re-index the flow** so Magpie becomes aware of the new document (see [Re-indexing](#re-indexing) below).
+
+If the new content originates from a source (e.g., a technical write‑up in an upstream repository), you can also use Magpie’s proposal workflow to draft and merge the document into the destination automatically.
+
+## Removing Documents
+
+To remove a document from the knowledge base:
+
+1. **Delete the Markdown file** from the destination repository (via `git rm` or a pull request).
+2. **Re-index the flow** – Magpie will remove the deleted sections from its search index and answer context.
+
+There is no separate “delete from index” endpoint; the index always reflects the current state of the destination repository after a re-index.
+
+## Re-indexing
+
+Re-indexing synchronises Magpie’s internal search index with the current state of the destination repository. It parses all `.md` files, splits them into heading-based sections, stores metadata, and (if embeddings are configured) generates vector embeddings.
+
+### Manual Re-indexing via API
+
+Use the `POST /api/knowledge/repositories/index` endpoint with the flow ID:
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"flowerbi"}'
+```
+
+Replace `"flowerbi"` with your flow’s ID as defined in `KNOWLEDGE_FLOWS`. The endpoint returns an indexed-repository summary:
+
+```json
+{
+  "repository": { "id": "flowerbi-docs", "name": "FlowerBI Docs" },
+  "documentCount": 12,
+  "sectionCount": 84,
+  "commitSha": "abc123..."
+}
+```
+
+If you have only one flow configured, you can omit the `flowId` — the system will use the single destination.
+
+### Automatic Re-indexing (Scheduler)
+
+Magpie’s background scheduler can automatically detect source changes and re-index the affected destination. The task `source-change-sync` runs every 10 minutes by default. To use it, ensure your flows have a Git source configured and a valid `GITHUB_TOKEN` (or other host token) for the destination repository.
+
+### Full Reset (Demo Use Only)
+
+In a development or demo environment, you can clear everything and re-index from scratch:
+
+```bash
+curl -s -X POST http://localhost:4000/api/admin/reset
+```
+
+**Warning:** This endpoint is unauthenticated and destructive – it deletes all questions, proposals, and indexed data, then re-syncs from the configured sources. Never expose it in production.
+
+## Verifying the Index State
+
+After re-indexing, inspect what Magpie knows:
+
+```bash
+# List all indexed repositories
+curl -s http://localhost:4000/api/knowledge/repositories
+
+# List all indexed documents
+curl -s http://localhost:4000/api/knowledge/documents
+
+# Get summary counts
+curl -s http://localhost:4000/api/knowledge/stats
+
+# Search for a specific term
+curl -s 'http://localhost:4000/api/knowledge/search?q=hotfix&limit=5'
+```
+
+## Notes on Git Integration
+
+- Magpie clones or pulls repositories into a local checkout directory (set by `MAGPIE_CHECKOUT_ROOT`).
+- Changes made directly in the checkout directory will be overwritten on the next sync. Always commit and push changes to the remote repository, then re-index.
+- Proposals generated by Magpie (e.g., from gap detection) are committed to a local branch and pushed as pull requests. Merging those PRs and re-indexing is the normal way to add content through the workflow.
+
+## See Also
+
+- [Ingestion documentation](ingestion.md) – detailed walkthrough of source/destination configuration and indexing.
+- [API reference](api.md) – full endpoint listing for knowledge management.
+- [Architecture](architecture.md) – overview of the sync and indexing pipeline.
