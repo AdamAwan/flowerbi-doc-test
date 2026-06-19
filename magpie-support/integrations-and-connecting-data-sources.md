@@ -5,11 +5,33 @@ status: draft
 
 # Integrations and Connecting Data Sources
 
-Markdown Magpie is designed to integrate with a variety of data sources, AI providers, storage backends, and deployment targets. This article describes every integration point and how to connect your data sources.
+Markdown Magpie connects to a variety of external systems for knowledge ingestion, AI providers, deployment, and agent collaboration. This guide explains each integration point and how to configure them.
 
-## Data Source Integrations
+## Data Source Integrations (Knowledge Ingestion)
 
 Markdown Magpie ingests Markdown content from four kinds of sources, configured via `KNOWLEDGE_SOURCES` in your `.env` file.
+
+### Source & Destination Configuration
+
+Define sources and destinations in environment variables as JSON arrays:
+
+| Variable | Description |
+|---|---|
+| `KNOWLEDGE_SOURCES` | Array of source objects where Markdown content is read from. |
+| `KNOWLEDGE_DESTINATIONS` | Array of destination objects where curated knowledge and proposals are written. |
+| `KNOWLEDGE_FLOWS` | Links sources to a destination for a given knowledge base. |
+| `MAGPIE_CHECKOUT_ROOT` | Local path where git repositories are cloned (default `.magpie/checkouts`). |
+
+Example configuration:
+
+```env
+MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+KNOWLEDGE_SOURCES=[{"id":"flowerbi","name":"FlowerBI Source","url":"https://github.com/danielearwicker/flowerbi.git","subpath":"src"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"flowerbi-docs","name":"FlowerBI Docs","url":"https://github.com/AdamAwan/flowerbi-doc-test.git","subpath":"docs"}]
+KNOWLEDGE_FLOWS=[{"id":"flowerbi","name":"FlowerBI KB","sourceIds":["flowerbi"],"destinationId":"flowerbi-docs"}]
+```
+
+### Supported Source Kinds
 
 | Kind | Configuration | Example |
 |------|---------------|---------|
@@ -18,7 +40,7 @@ Markdown Magpie ingests Markdown content from four kinds of sources, configured 
 | `internet` | A publicly accessible URL (fetched at index time) | `{"id":"docs","kind":"internet","url":"https://example.com/docs"}` |
 | `agent` | Knowledge captured from agent interactions (e.g., Codex, Claude) | `{"id":"agent","kind":"agent"}` |
 
-Sources are linked to curated knowledge base destinations through `KNOWLEDGE_FLOWS`. A flow defines which sources feed into a single destination repository.
+Sources with kind `agent` or `internet` are used for drafting proposals but are **not indexed** into the answer corpus. Only destinations (curated knowledge bases) are indexed for answering questions.
 
 ### Connecting a Git Source
 
@@ -116,35 +138,66 @@ The MCP server (`apps/mcp`) allows AI agents (Claude Code, Codex, etc.) to query
 - **stdio**: The client launches the server as a subprocess (e.g., `.mcp.json` in a Claude Code project).
 - **Streamable HTTP**: A persistent HTTP server on port 4001, supporting OAuth authentication.
 
-Both transports proxy all requests to the Markdown Magpie API. See [MCP Server](mcp.md) for full configuration.
+Both transports proxy all requests to the Markdown Magpie API. See [MCP Server](managing-knowledge-flows-in-markdown-magpie.md#mcp-integration) for full configuration.
+
+## External Agent Providers (Watcher)
+
+The watcher can use a local CLI tool as the AI provider, enabling integration with Codex, Claude Code, or any command-line agent.
+
+| Provider | Environment Variables |
+|---|---|
+| `codex` | `AI_PROVIDER=codex`, `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` (arg or stdin). |
+| `claude` | `AI_PROVIDER=claude`, `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE`. |
+| `openai-compatible` | Same as chat provider but for watcher process; uses `AI_PROVIDER=openai-compatible`. |
+| `mock` | Deterministic mock provider for testing. |
+
+The agent must return JSON matching the job output schema. The watcher validates and posts results back to the API.
 
 ## Step‑by‑Step: Connect a New Data Source
 
-1. **Add the source** to `KNOWLEDGE_SOURCES` in `.env`:
-   ```json
-   [{"id":"my-api-docs","url":"https://github.com/myorg/api-docs.git","subpath":"content"}]
-   ```
-2. **Add a destination** repository for the curated KB:
-   ```json
-   [{"id":"my-kb","url":"https://github.com/myorg/knowledge-base.git","subpath":"docs"}]
-   ```
-3. **Create a flow** linking source(s) to the destination:
-   ```json
-   [{"id":"api-kb","sourceIds":["my-api-docs"],"destinationId":"my-kb"}]
-   ```
-4. **Set `MAGPIE_CHECKOUT_ROOT`** to a writable directory and ensure the API can clone repositories.
-5. **Start the API** and index the flow:
-   ```bash
-   curl -X POST http://localhost:4000/api/knowledge/repositories/index \
-     -H 'content-type: application/json' \
-     -d '{"flowId":"api-kb"}'
-   ```
-6. **Ask a question** to verify the data is indexed:
-   ```bash
-   curl -s http://localhost:4000/api/ask \
-     -H 'content-type: application/json' \
-     -d '{"question":"How do I authenticate?"}'
-   ```
+1. **Set environment variables** in `.env`:
+
+```env
+MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+KNOWLEDGE_SOURCES=[{"id":"my-source","url":"https://github.com/org/docs.git","subpath":"articles"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"my-dest","url":"https://github.com/org/mykb.git","subpath":"docs"}]
+KNOWLEDGE_FLOWS=[{"id":"myflow","sourceIds":["my-source"],"destinationId":"my-dest"}]
+STORAGE_BACKEND=postgres
+DATABASE_URL=postgres://...
+AI_PROVIDER=mock
+```
+
+2. **Start Postgres** (if not already running):
+
+```bash
+docker compose up -d postgres
+```
+
+3. **Run migrations**:
+
+```bash
+npm run db:migrate
+```
+
+4. **Start the API**:
+
+```bash
+MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:api
+```
+
+5. **Index the destination**:
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index -H 'content-type: application/json' -d '{"flowId":"myflow"}'
+```
+
+6. **Ask a question**:
+
+```bash
+curl -s http://localhost:4000/api/ask -H 'content-type: application/json' -d '{"question":"What does my knowledge base cover?"}'
+```
+
+Your data source is now integrated and searchable.
 
 ## Summary
 

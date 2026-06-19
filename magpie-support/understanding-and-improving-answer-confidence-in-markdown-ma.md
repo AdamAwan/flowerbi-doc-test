@@ -7,6 +7,16 @@ status: draft
 
 When Markdown Magpie returns a low-confidence answer, it means the system could not find sufficiently relevant source material in the indexed knowledge base to answer your question with high certainty. This guide explains why low-confidence answers occur and how to improve answer quality.
 
+## What Does Confidence Mean in Magpie?
+
+Magpie assigns a confidence score to each generated answer. This score reflects how certain the system is that the answer is correct and well‑supported. Confidence is typically derived from:
+
+- **Model probability**: The likelihood assigned by the underlying language model to the generated tokens.
+- **Retrieval relevance**: When using Retrieval Augmented Generation (RAG), how closely the retrieved documents match the query.
+- **Answer completeness**: Whether the answer directly addresses the question without ambiguity.
+
+Low confidence does not necessarily mean the answer is wrong – it indicates that the system has less assurance due to missing or conflicting evidence.
+
 ## Why Low-Confidence Answers Happen
 
 Confidence is derived from the relevance scores of the indexed sections retrieved for your question. A low score indicates one of the following:
@@ -17,6 +27,9 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **The embeddings are not generated.** Even with hybrid retrieval enabled, if embeddings have not been computed for indexed sections (e.g., they are still `NULL` in the database), the hybrid fallback may be keyword-only, lowering retrieval quality.
 - **The AI provider is not configured correctly.** In `direct` mode, the answer is synthesized by a chat provider (e.g., OpenAI-compatible or Azure OpenAI). If the provider is misconfured, the answer may be generic or nonsensical, leading to low confidence scores.
 - **The question is ambiguous or malformed.** The retrieval pipeline works best with clear, specific questions.
+- **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
+- **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
+- **Model limitations.** Smaller or less capable models may struggle with complex reasoning, leading to lower confidence even when context is sufficient.
 
 ## Checking Current Answer Quality
 
@@ -57,7 +70,7 @@ Hybrid retrieval (keyword + vector) significantly improves relevance. To enable 
 
 - Set `KNOWLEDGE_STORE=postgres` and provide a valid `DATABASE_URL`.
 - Set either:
-  - **OpenAI-compatible embedding provider:** Set `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (e.g., `text-embedding-3-small`), `OPENAI_COMPATIBLE_EMBEDDING_BASE_URL`, and `OPENAI_COMPATIBLE_EMBEDDING_API_KEY`.
+  - **OpenAI-compatible embedding provider:** Set `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (e.g., `text-embedding-3-small`), `OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_API_KEY`.
   - **Azure OpenAI embedding provider:** Set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
 
 After configuration, re-index the flow (step 1) to generate embeddings. The system will automatically switch to hybrid mode.
@@ -89,7 +102,13 @@ Markdown Magpie splits documents by headings. To improve retrieval:
 - Include relevant keywords naturally.
 - Avoid extremely long sections; break them into smaller, well-named subsections.
 
-### 5. Verify AI Provider Configuration
+### 5. Refine Your Queries
+
+- Be specific and avoid open‑ended phrasing.
+- Include relevant keywords that match the structure of your knowledge base.
+- Use prompt engineering: provide clear instructions in system prompts, specifying the desired format and level of certainty.
+
+### 6. Verify AI Provider Configuration
 
 If the answer content itself is poor (not just low confidence), check the chat provider:
 
@@ -97,7 +116,13 @@ If the answer content itself is poor (not just low confidence), check the chat p
 - Test with a simple question that should be well-covered.
 - Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart. `mock` produces deterministic answers from retrieved context without requiring API keys.
 
-### 6. Monitor Feedback and Gap Signals
+### 7. Adjust System Parameters
+
+- **Temperature**: Lower values (e.g., 0.1–0.3) produce more deterministic answers; higher values increase creativity but may reduce confidence.
+- **Top‑k / Top‑p**: Tighten these parameters to limit the model’s sampling space for more focused outputs.
+- **Max tokens**: Ensure the answer length is sufficient to fully address the question.
+
+### 8. Monitor Feedback and Gap Signals
 
 Use the feedback mechanism to improve the system:
 
@@ -112,6 +137,18 @@ curl -X POST http://localhost:4000/api/questions/:id/gap \
 
 This feeds the gap-clustering algorithm and helps prioritize which documents to write.
 
+### 9. Evaluate and Iterate
+
+- Review low‑confidence answers to identify patterns (e.g., specific topics or question types).
+- Test changes to queries or knowledge base updates to measure improvement.
+
+## Interpreting Confidence Scores
+
+Confidence is a tool for developers and users, not an absolute measure of correctness. Use it as a guide to:
+- Flag answers that require human review.
+- Prioritise which knowledge base sections need enrichment.
+- Compare model versions or prompt configurations.
+
 ## Summary Table
 
 | Symptom | Likely Cause | Action |
@@ -121,5 +158,6 @@ This feeds the gap-clustering algorithm and helps prioritize which documents to 
 | Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
 | Answers are gibberish or off-topic | AI provider misconfigured or down | Check provider env vars, test with `mock` |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
+| Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
 
 By following these steps, you can systematically raise answer confidence from low to high and close knowledge gaps over time.
