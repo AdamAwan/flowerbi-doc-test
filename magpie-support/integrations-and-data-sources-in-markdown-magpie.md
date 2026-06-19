@@ -1,0 +1,245 @@
+---
+title: Integrations and Data Sources in Markdown Magpie
+status: draft
+---
+
+# Integrations and Data Sources
+
+Markdown Magpie connects to a variety of external systems for knowledge ingestion, AI providers, deployment, and agent collaboration. This guide explains each integration point and how to configure them.
+
+## Data Sources (Knowledge Ingestion)
+
+Markdown Magpie ingests Markdown content from *sources* and writes reviewed proposals to *destinations*. Both are configured using environment variables.
+
+### Source & Destination Configuration
+
+Define sources and destinations in environment variables as JSON arrays:
+
+| Variable | Description |
+|---|---|
+| `KNOWLEDGE_SOURCES` | Array of source objects where Markdown content is read from. |
+| `KNOWLEDGE_DESTINATIONS` | Array of destination objects where curated knowledge and proposals are written. |
+| `KNOWLEDGE_FLOWS` | Links sources to a destination for a given knowledge base. |
+| `MAGPIE_CHECKOUT_ROOT` | Local path where git repositories are cloned (default `.magpie/checkouts`). |
+
+Example configuration (from [`docs/ingestion.md`](docs/ingestion.md)):
+
+```env
+MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+KNOWLEDGE_SOURCES=[{"id":"flowerbi","name":"FlowerBI Source","url":"https://github.com/danielearwicker/flowerbi.git","subpath":"src"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"flowerbi-docs","name":"FlowerBI Docs","url":"https://github.com/AdamAwan/flowerbi-doc-test.git","subpath":"docs"}]
+KNOWLEDGE_FLOWS=[{"id":"flowerbi","name":"FlowerBI KB","sourceIds":["flowerbi"],"destinationId":"flowerbi-docs"}]
+```
+
+### Supported Source Kinds
+
+| Kind | Configuration | Example |
+|---|---|---|
+| `local` | `{ "path": "knowledge-bases/cats" }` | A folder inside the repository. |
+| `git` | `{ "url": "https://...", "subpath": "docs" }` | Clone a remote repository, optionally using a subfolder. |
+| `internet` | `{ "kind": "internet", "url": "https://example.com/docs" }` | Fetch Markdown from a public URL. |
+| `agent` | `{ "kind": "agent" }` | Content provided by an AI agent (e.g., from Claude or Codex). |
+
+Sources with kind `agent` or `internet` are used for drafting proposals but are **not indexed** into the answer corpus. Only destinations (curated knowledge bases) are indexed for answering questions.
+
+### Indexing a Data Source
+
+After configuration, index a flow’s destination with the HTTP API:
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"flowerbi"}'
+```
+
+The API walks the clone, parses Markdown and frontmatter, splits sections, stores them in PostgreSQL, and (if an embeddings provider is set) generates vector embeddings for hybrid search.
+
+## AI Providers (Chat & Embeddings)
+
+Markdown Magpie keeps AI provider logic behind pluggable adapters. You can configure different providers for answering questions and for generating embeddings.
+
+### Chat Providers
+
+Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised.
+
+| Provider | Environment Variables | Notes |
+|---|---|---|
+| `mock` | `AI_PROVIDER=mock` | Deterministic responses, no API key required. Default for development. |
+| `openai-compatible` | `AI_PROVIDER=openai-compatible`, `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | Works with any OpenAI-compatible API (OpenAI, DeepSeek, OpenRouter, etc.). |
+| `azure-openai` | `AI_PROVIDER=azure-openai`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI service. |
+
+Execution modes:
+
+- **`direct`** (default): The API calls the provider synchronously during `/api/ask`.
+- **`queue`**: The API enqueues an `answer_question` job; a separate watcher process claims and processes the job.
+
+Switch at runtime via the API or web console (see [`POST /api/config`](docs/api.md)).
+
+### Embedding Providers
+
+Embeddings are required for hybrid (keyword + vector) retrieval. Configure them independently of chat providers:
+
+| Provider | Required Variables |
+|---|---|
+| OpenAI-compatible embeddings | `OPENAI_COMPATIBLE_EMBEDDING_MODEL`, plus base URL (`OPENAI_COMPATIBLE_EMBEDDING_BASE_URL`, falls back to `OPENAI_COMPATIBLE_BASE_URL`) and API key (`OPENAI_COMPATIBLE_EMBEDDING_API_KEY`, falls back to `OPENAI_COMPATIBLE_API_KEY`). |
+| Azure OpenAI embeddings | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`. |
+
+To enable hybrid retrieval, you must also have `KNOWLEDGE_STORE=postgres` and `DATABASE_URL` set. The system automatically activates hybrid mode when both the database and a complete set of embedding credentials are present.
+
+## Git Integration (Sync & Proposals)
+
+Markdown Magpie syncs git repositories on startup and uses them for proposal branches.
+
+### Key features
+
+- **Source sync**: Sources and destinations defined with `url` are cloned or fast-forwarded into `MAGPIE_CHECKOUT_ROOT` during API startup and on the `source-change-sync` background task.
+- **Proposal branches**: Proposals are committed to a new branch (`magpie/proposal-*`) using the `local-git` publisher. If a `GITHUB_TOKEN` is provided, the branch is also raised as a pull request.
+- **Crunch branches**: Knowledge-base tidy operations are published to `magpie/crunch-*` branches.
+
+### Pull Request Provider
+
+The `gaps-to-pull-requests` reconciler automatically advances proposals through the lifecycle: draft → ready → branch-pushed → pr-opened → merged → rejected. It polls open PRs, resolves merged proposals’ gaps, and re-indexes the destination upon merge.
+
+## Deployment Integrations
+
+### Docker Compose (Default)
+
+The single-host deployment shape uses Docker Compose with optional managed services:
+
+| Service | Notes |
+|---|---|
+| API container (`:4000`) | HTTP server. |
+| Web container (`:3000`) | Next.js admin UI. |
+| MCP container | stdio or HTTP MCP server (optional, via profile). |
+| PostgreSQL with pgvector | Primary database. |
+| Redis (optional) | Needed only if a Redis-backed queue adapter is selected. |
+| Local object storage | For raw document snapshots (optional, not yet implemented). |
+
+### Azure (Optional Managed Path)
+
+Azure is the preferred managed cloud provider when a hosted environment is required. Likely managed services (from [`infra/azure/README.md`](infra/azure/README.md)):
+
+- Azure Container Apps for API, web, MCP, and worker containers.
+- Azure Database for PostgreSQL with vector support.
+- Azure Cache for Redis (if a Redis queue adapter is used).
+- Azure Blob Storage for raw snapshots and artifacts.
+- Azure OpenAI for chat and embeddings.
+- Azure DevOps Repos or GitHub for pull request workflows.
+- Microsoft Entra ID for organisation authentication.
+
+Portability is maintained; Azure adapters should not leak into core domain logic.
+
+## MCP Integration (Model Context Protocol)
+
+The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agents (Claude Code, Codex, etc.) to interact with the knowledge base via standard MCP tools.
+
+### Supported MCP Transports
+
+| Transport | How It Works | Recommended For |
+|---|---|---|
+| **stdio** | MCP messages over stdin/stdout. The client launches the server as a subprocess. | Local development with Claude Code or similar. |
+| **Streamable HTTP** | Long-lived HTTP server using SSE. Clients make JSON-RPC POST requests. | Network-accessible deployments, multi-client scenarios. |
+
+### MCP Tools
+
+- `kb.ask`: Ask a question with citations and gap detection.
+- `kb.search`: Search indexed sections by keyword.
+- `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
+
+### Configuration
+
+Common variables: `API_BASE_URL` (default `http://localhost:4000`), `ANSWER_POLL_INTERVAL_MS`, `ANSWER_TIMEOUT_MS`.
+
+HTTP transport requires `MCP_HTTP_PORT` (default `4001`) and optionally `MCP_RESOURCE_URL`. Auth requires `MCP_API_AUTH_TOKEN` when `AUTH_REQUIRED=true`.
+
+For full details, see [`docs/mcp.md`](docs/mcp.md).
+
+## External Agent Providers (Watcher)
+
+The watcher can use a local CLI tool as the AI provider, enabling integration with Codex, Claude Code, or any command-line agent.
+
+| Provider | Environment Variables |
+|---|---|
+| `codex` | `AI_PROVIDER=codex`, `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` (arg or stdin). |
+| `claude` | `AI_PROVIDER=claude`, `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE`. |
+| `openai-compatible` | Same as chat provider but for watcher process; uses `AI_PROVIDER=openai-compatible`. |
+| `mock` | Deterministic mock provider for testing. |
+
+The agent must return JSON matching the job output schema. The watcher validates and posts results back to the API.
+
+## Storage Backends
+
+| Variable | Purpose | Options |
+|---|---|---|
+| `STORAGE_BACKEND` | Primary storage for questions, gaps, proposals, and AI jobs. | `postgres` (recommended), `memory` (local dev only). |
+| `KNOWLEDGE_STORE` | Where indexed sections and embeddings are stored. | `postgres` (required for hybrid retrieval), `memory`. |
+| `DATABASE_URL` | PostgreSQL connection string. | Postgres with pgvector extension. |
+
+Redis is started by Docker Compose but is not required for default setup. It will be used when a Redis-backed queue adapter is selected.
+
+## Authentication
+
+Authentication is optional. When enabled via `AUTH_REQUIRED=true`, tokens from Auth0 are validated locally using JWKS.
+
+- **API**: Validates `Authorization: Bearer <token>` on endpoint requests.
+- **MCP HTTP**: Acts as an OAuth protected resource; requires per-tool scopes (`read:knowledge`, `ask:knowledge`, `feedback:questions`).
+- **MCP stdio**: Presents `MCP_AUTH_TOKEN` to the API.
+
+All authentication is configurable via environment variables. See [`docs/mcp.md`](docs/mcp.md) and the `@magpie/auth` package.
+
+## Quick-Start: Connecting Your Data Source
+
+1. **Set environment variables** in `.env`:
+
+```env
+MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+KNOWLEDGE_SOURCES=[{"id":"my-source","url":"https://github.com/org/docs.git","subpath":"articles"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"my-dest","url":"https://github.com/org/mykb.git","subpath":"docs"}]
+KNOWLEDGE_FLOWS=[{"id":"myflow","sourceIds":["my-source"],"destinationId":"my-dest"}]
+STORAGE_BACKEND=postgres
+DATABASE_URL=postgres://...
+AI_PROVIDER=mock
+```
+
+2. **Start Postgres** (if not already running):
+
+```bash
+docker compose up -d postgres
+```
+
+3. **Run migrations**:
+
+```bash
+npm run db:migrate
+```
+
+4. **Start the API**:
+
+```bash
+MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:api
+```
+
+5. **Index the destination**:
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index -H 'content-type: application/json' -d '{"flowId":"myflow"}'
+```
+
+6. **Ask a question**:
+
+```bash
+curl -s http://localhost:4000/api/ask -H 'content-type: application/json' -d '{"question":"What does my knowledge base cover?"}'
+```
+
+Your data source is now integrated and searchable.
+
+## Related Documentation
+
+- [Architecture Overview](docs/architecture.md) – provider strategy and primary flow.
+- [Ingestion Guide](docs/ingestion.md) – detailed source/destination configuration and indexing.
+- [Chat Providers](docs/chat-providers.md) – AI provider setup.
+- [MCP Server](docs/mcp.md) – connecting AI agents.
+- [AI Jobs & Watcher](docs/ai-jobs.md) – background job contracts and external agents.
+- [API Reference](docs/api.md) – all HTTP endpoints.
+- [Azure Deployment Notes](infra/azure/README.md) – managed Azure deployment.
+- [README.md](README.md) – local development setup.
