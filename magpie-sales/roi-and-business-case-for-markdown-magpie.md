@@ -107,9 +107,9 @@ The product is open source (MIT license) with no licensing fees. Costs are limit
 
 ## Risk Mitigation
 
-- **Risk:** AI provider outage or cost overrun. *Mitigation:* The system supports multiple providers; fallback to a local model or mock is possible. Usage caps can be set.
+- **Risk:** AI provider outage or cost overrun. *Mitigation:* The system supports multiple providers; fallback to a local model is possible. Usage caps can be set.
 - **Risk:** Low adoption by engineers. *Mitigation:* Integration with existing tools (Slack, MCP clients like Claude Code) makes interaction frictionless. The pitch deck emphasises "won't lie · won't leak · won't rot" — clear value proposition.
-- **Risk:** Generated proposals are too low quality. *Mitigation:* Human review is required before merging; the mock provider can be used for deterministic baseline quality.
+- **Risk:** Generated proposals are too low quality. *Mitigation:* Human review is required before merging; the configured AI provider can be tuned for quality.
 
 ## Conclusion
 
