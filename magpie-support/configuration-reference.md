@@ -1,0 +1,138 @@
+---
+title: Configuration Reference
+owner: magpie-ops
+status: draft
+tags: [configuration, reference, env]
+review_cycle_days: 90
+---
+
+# Configuration Reference
+
+This document describes all environment variables and configuration options for Markdown Magpie. It is the single source of truth for settings related to AI providers, embeddings, storage, knowledge sources/destinations, authentication, and deployment.
+
+## Knowledge Sources, Destinations, and Flows
+
+Configure the flow pipeline via these environment variables:
+
+| Variable | Description | Example |
+|---|---|---|
+| `KNOWLEDGE_SOURCES` | JSON array of source objects. Each source must have at least `id`, `name`, and `kind`. | `[{"id":"my-repo","kind":"git","url":"...","subpath":"docs"}]` |
+| `KNOWLEDGE_DESTINATIONS` | JSON array of destination objects (writable Git repos). | `[{"id":"my-dest","name":"My KB","url":"...","subpath":"docs"}]` |
+| `KNOWLEDGE_FLOWS` | JSON array of flow objects linking source IDs to a destination ID. | `[{"id":"myflow","sourceIds":["my-repo"],"destinationId":"my-dest"}]` |
+| `MAGPIE_CHECKOUT_ROOT` | Local directory for cloned repositories. | `.magpie/checkouts` |
+| `KNOWLEDGE_STORE` | Backend for indexed knowledge. Either `postgres` (recommended) or `memory`. | `postgres` |
+| `DATABASE_URL` | Postgres connection string (required when `KNOWLEDGE_STORE=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
+
+For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
+
+### Supported Source Kinds
+
+- `local`: A folder on the server (e.g., `knowledge-bases/cats`).
+- `git`: A remote Git repository, optionally with `subpath`.
+- `internet`: A public URL returning Markdown (fetched at index time).
+- `agent`: Knowledge captured from agent interactions (not indexed for answering).
+
+## AI Provider Configuration
+
+Set `AI_PROVIDER` to one of the following and configure the corresponding variables:
+
+| Provider | `AI_PROVIDER` value | Required Variables |
+|---|---|---|
+| Mock (deterministic) | `mock` | None |
+| OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` |
+| Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` |
+| Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` |
+
+**Execution Modes**
+
+Set `AI_EXECUTION_MODE` to `direct` (synchronous) or `queue` (async with watcher). Default: `direct`.
+
+## Embedding Provider Configuration
+
+Embeddings are configured independently of the chat provider. Set one of the following groups to enable hybrid retrieval (keyword + vector):
+
+**OpenAI‑compatible:**
+```env
+OPENAI_COMPATIBLE_EMBEDDING_BASE_URL=https://api.openai.com/v1
+OPENAI_COMPATIBLE_EMBEDDING_API_KEY=sk-...
+OPENAI_COMPATIBLE_EMBEDDING_MODEL=text-embedding-3-small
+```
+
+**Azure OpenAI:**
+```env
+AZURE_OPENAI_ENDPOINT=https://myinstance.openai.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
+```
+
+Embeddings require `KNOWLEDGE_STORE=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
+
+## Storage Backend Configuration
+
+| Backend | Variable | Value |
+|---|---|---|
+| Postgres (default) | `STORAGE_BACKEND` | `postgres` |
+| In‑memory (fallback) | `STORAGE_BACKEND` | `memory` |
+
+For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only for job queuing (set `QUEUE_URL` if needed).
+
+## Version Control Integration (Pull Requests)
+
+| Provider | Required Variable |
+|---|---|---|
+| GitHub | `GITHUB_TOKEN` |
+| GitLab (planned) | `GITLAB_TOKEN` |
+| Azure DevOps (planned) | `AZURE_DEVOPS_TOKEN` |
+
+If no token is set, proposals are pushed to a branch but no PR is created.
+
+## Authentication (Auth0 / Entra ID)
+
+Set `AUTH_REQUIRED=true` to enable authentication. Then configure one of the following:
+
+**Auth0:**
+```env
+AUTH0_ISSUER_BASE_URL=https://your-tenant.eu.auth0.com
+AUTH0_AUDIENCE=https://markdown-magpie.local/api
+```
+Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
+
+**Microsoft Entra ID:**
+- Use the standard Azure environment variables (see `infra/azure/README.md`).
+
+**MCP‑specific tokens:**
+- `MCP_AUTH_TOKEN`: Token used by the MCP stdio server to authenticate to the API.
+- `MCP_API_AUTH_TOKEN`: Token used by the MCP HTTP server for downstream API calls.
+
+Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
+
+## MCP Server Configuration
+
+The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess) and `streamable-http` (persistent HTTP on port 4001). Configure via:
+
+```env
+MCP_TRANSPORT=stdio  # or streamable-http
+MCP_PORT=4001        # for HTTP transport
+```
+
+When HTTP transport is used, per‑tool OAuth scopes are enforced:
+
+| Tool | Scope |
+|---|---|
+| `kb.search` | `read:knowledge` |
+| `kb.ask` | `ask:knowledge` |
+| `kb.feedback` | `feedback:questions` |
+
+## Deployment Configuration
+
+| Target | Key Variables |
+|---|---|
+| Docker Compose | Use `docker compose up`; application containers require `profile=app`. |
+| Azure Container Apps | See `infra/azure/README.md`. |
+| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. |
+
+The default production shape is Docker Compose.
+
+---
+*This reference consolidates content from the Getting Started, Integrations, Flows, and Permissions documents.*
