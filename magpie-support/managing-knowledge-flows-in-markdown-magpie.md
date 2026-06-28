@@ -241,7 +241,7 @@ Rather than a single whole-knowledge-base crunch, Magpie now runs several **patr
   - **Split** – breaks overgrown documents into focused pieces.
 - **Improve-patrol** – editorial growth; source-grounded expansions for fine-but-thin documents.
 
-Each patrol produces a `MaintenanceRun` record surfaced in the Schedules page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise).
+Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise).
 
 Patrol schedules can be enabled/disabled per flow and cron expression via the **Schedules** page in the web console.
 
