@@ -11,7 +11,7 @@ This guide helps sales and solution engineers respond to the most frequent objec
 
 **Objection:** The buyer worries that using an AI-powered system will expose sensitive internal documentation to third-party model providers or the public internet.
 
-**Response:** Markdown Magpie is designed with a “won’t leak” principle as a core guarantee. All AI work is abstracted behind provider-neutral interfaces. You can run the entire stack locally with your own models (e.g., a local Ollama instance or an OpenAI-compatible gateway on your network) without ever sending data to an external API. The default deployment uses self-hosted Postgres and Redis, and no data leaves your infrastructure unless you explicitly configure a remote AI provider. Even then, the system logs and indexes remain on your infrastructure. The source code is fully open-source for audit. **Supporting evidence** – the pitch deck lists “won’t leak” as a core promise; the architecture document describes provider strategies that keep data local; and the AI jobs contract allows any CLI agent to run without cloud dependencies.
+**Response:** Markdown Magpie is designed with a “won’t leak” principle as a core guarantee. All AI work is abstracted behind provider-neutral interfaces. You can run the entire stack locally with your own models (e.g., a local Ollama instance or an OpenAI-compatible gateway on your network) without ever sending data to an external API. The default deployment uses self-hosted Postgres (Redis is optional and not required). No data leaves your infrastructure unless you explicitly configure a remote AI provider. Even then, the system logs and indexes remain on your infrastructure. The source code is fully open-source for audit. **Supporting evidence** – the pitch deck lists “won’t leak” as a core promise; the architecture document describes provider strategies that keep data local; and the AI jobs contract allows any CLI agent to run without cloud dependencies.
 
 ## 2. “Why would we trust an AI to write documentation without human review?”
 
@@ -50,13 +50,13 @@ No change touches the curated documentation without explicit approval. The revie
 
 **Response:** The system is designed to minimise unnecessary AI calls:
 
-- In **direct mode**, only questions that produce low confidence will eventually trigger a proposal job – most questions are answered from the indexed knowledge alone without any AI invocation (the hybrid search uses embeddings, but the embedding models are inexpensive to run).
-- The mock provider allows full functional testing with zero cost.
-- You can use a local model (Ollama, LM Studio) for both embeddings and answering, eliminating per-request fees.
-- The watcher runs only when there are jobs to process, so idle clusters cost nothing.
+- The queue-only architecture means every question is answered by the watcher, but you can use a local model (Ollama, LM Studio) for both embeddings and answering, eliminating per-request fees.
+- Embedding models are inexpensive to run; query-time embedding is synchronous and cheap.
+- The watcher only runs when there are jobs to process, so idle clusters cost nothing.
 - Proposal generation is batched per gap cluster, so many questions may be covered by a single AI draft.
+- For functional testing, the repo includes a deterministic OpenAI-compatible fixture that can be used at zero cost.
 
-**Supporting evidence** – the AI jobs documentation mentions the mock provider for local development; the ingestion docs show that embeddings can be done with open-source models; the architecture mentions scheduler-based crunches that run on interval rather than per-query.
+**Supporting evidence** – the AI jobs documentation mentions the watcher model and provider capabilities; the ingestion docs show that embeddings can be done with open-source models; the architecture mentions scheduler-based crunches that run on interval rather than per-query; the scripts/README describes the openai-fixture used in E2E tests.
 
 ## 7. “Our docs are huge – will this scale to thousands of pages?”
 
