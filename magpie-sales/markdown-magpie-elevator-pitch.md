@@ -7,6 +7,8 @@ status: draft
 
 **Markdown Magpie is a knowledge maintenance assistant that automatically detects gaps in your documentation, generates draft fixes, and raises pull requests for human review—so your knowledge base stays accurate, complete, and up to date without manual busywork.**
 
+An earlier draft described Magpie more succinctly as *"a tool that automatically transforms and maintains markdown documentation across your projects, ensuring consistency and saving time."* Both formulations capture the same core value of automated, continuous documentation maintenance.
+
 ## Why This Pitch?
 
 The one-sentence pitch above captures the core value: it’s not just a documentation search tool; it actively maintains the knowledge base by identifying weaknesses and proposing improvements. It highlights three key actions—detect, generate, raise—which map to the product loop described in the project’s README: answer questions, log low-confidence answers, cluster gaps, generate proposals, and open PRs.
