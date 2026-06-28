@@ -18,13 +18,13 @@ Markdown Magpie is a **vendor-neutral knowledge maintenance system** that keeps 
 
 ## Solution Overview
 
-Markdown Magpie ingests Git repos of Markdown documentation, indexes every section, and uses hybrid keyword + vector search to answer questions with precise citations. When an answer is low-confidence or users flag a gap, the system clusters related gaps, drafts new or improved Markdown content, and opens a pull request for human review. A scheduled “Crunch” pass consolidates and splits documents to prevent fragmentation.
+Markdown Magpie ingests Git repos of Markdown documentation, indexes every section, and uses hybrid keyword + vector search to answer questions with precise citations. When an answer is low-confidence or users flag a gap, the system clusters related gaps, drafts new or improved Markdown content, and opens a pull request for human review. A set of scheduled patrols (fix-patrol for correctness and improve-patrol for editorial growth) keeps the knowledge base accurate and tidy by running rolling checks on individual documents.
 
 Key features for ROI:
 
 - **Zero-touch gap detection & proposal** – the system identifies missing or weak documentation and proposes fixes automatically.
 - **Pull request workflow** – changes go through standard code review, so quality is maintained without manual rewriting.
-- **Scheduled Crunch** – fights knowledge-base bloat by automatically organising documents.
+- **Patrol maintenance (fix-patrol & improve-patrol)** – prevents knowledge-base rot by continuously verifying claims, deduplicating, splitting bloated files, and growing fine-but-thin documents with source-backed content.
 - **MCP & API integrations** – connects to Claude, Codex, or any MCP client, letting AI agents directly query the knowledge base.
 - **Portable & cheap** – runs on Docker Compose or optional Azure deployment; no per-seat or per-document licensing.
 
@@ -53,7 +53,7 @@ Actual savings vary, but even conservative models show payback within 3–6 mont
 
 ## Intangible Benefits
 
-- **“Won’t lie, won’t leak, won’t rot”** – answers are grounded in indexed Markdown, not hallucinated; content stays fresh via scheduled Crunch and pull requests.
+- **“Won’t lie, won’t leak, won’t rot”** – answers are grounded in indexed Markdown, not hallucinated; content stays fresh via scheduled patrols and pull requests.
 - **Vendor neutrality** – Magpie works with any Git host (GitHub, GitLab, Azure DevOps) and any language/LLM provider.
 - **Audit trail** – every answer, change proposal, and merge is tracked in Postgres.
 - **Knowledge continuity** – departing employees leave a living, self-healing knowledge base.

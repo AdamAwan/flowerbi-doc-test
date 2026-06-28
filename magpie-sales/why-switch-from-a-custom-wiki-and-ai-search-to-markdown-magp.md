@@ -51,11 +51,11 @@ Magpie keeps AI providers behind interfaces. You can switch from OpenAI to Azure
 
 > “Provider support should stay behind `AgentRunner` adapters... Prefer OpenAI-compatible `/chat/completions` support for broad API coverage.” (Source: `docs/ai-jobs.md`)
 
-### 6. Optional Scheduled Tidying (Crunch)
+### 6. Automated Patrol Maintenance (Fix and Improve)
 
-Over time, docs get bloated or fragmented. Magpie’s “Crunch” pass plans consolidation and splitting operations — reviewed and published as a PR.
+Over time, docs get stale, bloated, or fragmented. Magpie’s patrol lenses — fix-patrol (verify, dedupe, split) and improve-patrol — run on rolling cursors, checking the least-recently-visited files each run. They propose corrections, consolidations, splits, and source-backed additions, all via reviewable pull requests. This keeps the knowledge base accurate and tidy without a manual editorial pass.
 
-> “Crunch is a scheduled maintenance pass that fights knowledge-base fragmentation: it consolidates overlapping documents and splits bloated, multi-topic documents.” (Source: `docs/ai-jobs.md`)
+> “Patrols check existing documents and fix, de-duplicate, split, or expand them so the base stays correct and tidy as it grows.” (Source: `data-flow diagram`)
 
 ## Why Your Engineering Team Will Thank You
 

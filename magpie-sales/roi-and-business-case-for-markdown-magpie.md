@@ -22,7 +22,7 @@ Traditional documentation tools either require heavy manual curation (wiki farms
 - **Automated Q&A with citations:** Users ask questions in natural language; Markdown Magpie retrieves relevant sections from the indexed Markdown knowledge base and returns cited answers. Low-confidence answers flag missing content.
 - **Knowledge gap detection:** Every question is logged. When the system returns low confidence, it records a gap. Repeated gaps are clustered automatically, revealing exactly what documentation is missing or outdated.
 - **Automated proposal generation:** From a gap cluster, Markdown Magpie drafts a Markdown proposal (a new page or edit) using an AI provider (e.g., GPT, Claude, DeepSeek). The proposal is submitted as a pull request for human review, merging the improvement into the live knowledge base.
-- **Scheduled maintenance (Crunch):** Periodically analyses the knowledge base for fragmentation (overly long documents, overlapping topics) and proposes reorganisations.
+- **Continuous patrol maintenance:** Instead of a single whole-KB maintenance pass, the system runs targeted patrols on rolling cursors: a fix-patrol checks correctness (verify, dedupe, split) and an improve-patrol grows fine-but-thin documents with source-backed additions. These patrols keep the knowledge base accurate and tidy without competing with gap work.
 - **Seamless Git integration:** Changes are committed to branches, reviewed, and merged via standard Git workflows (GitHub, GitLab, Azure DevOps). No new tools or training required for engineers.
 - **Multiple AI providers:** Supports OpenAI-compatible APIs, Azure OpenAI, local models, or CLI agents (Codex, Claude Code). The system can run completely on-premises or in the cloud.
 
@@ -52,7 +52,7 @@ Traditional documentation tools either require heavy manual curation (wiki farms
 **Assumption:** One production incident per quarter is caused by engineers following outdated or missing runbooks. Average cost of incident (engineering time, rollback, customer impact): $10,000.
 - Annual incident cost: 4 × $10,000 = **$40,000**.
 
-**With Markdown Magpie:** Automated maintenance (Crunch + gap proposal pipeline) ensures runbooks are current. Assume 50% reduction in documentation-related incidents.
+**With Markdown Magpie:** Automated patrols (verify + dedupe + split) ensure runbooks are current and accurate. Assume 50% reduction in documentation-related incidents.
 - New annual incident cost: 2 × $10,000 = **$20,000**.
 - **Annual savings: $20,000.**
 
@@ -103,7 +103,7 @@ The product is open source (MIT license) with no licensing fees. Costs are limit
 
 1. **Phase 1 – Pilot (Month 1):** Deploy Markdown Magpie for one knowledge base (e.g., internal engineering runbooks). Index existing Markdown, test Q&A with 3–5 engineers, monitor gaps and feedback.
 2. **Phase 2 – Expand (Month 2–3):** Add more knowledge bases, enable automated proposal generation, train the team on review workflows.
-3. **Phase 3 – Full adoption (Month 4+):** Turn on Crunch (scheduled maintenance), integrate with CI/CD pipelines, and roll out to all teams.
+3. **Phase 3 – Full adoption (Month 4+):** Turn on patrol maintenance (fix-patrol, improve-patrol), integrate with CI/CD pipelines, and roll out to all teams.
 
 ## Risk Mitigation
 

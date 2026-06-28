@@ -21,7 +21,7 @@ The closest alternatives fall into three categories:
 Magpie’s narrative spine is **“won’t lie · won’t leak · won’t rot”** plus a **“cheap & yours”** close (source: [`presentation/README.md`](https://github.com/AdamAwan/markdown-magpie/tree/main/presentation/README.md)). This means:
 - **Won’t lie** – Answers come with citations to specific file paths, headings, and commits; low-confidence answers are flagged as gaps rather than producing confident hallucinations.
 - **Won’t leak** – Knowledge stays in your own Git repos. No data is sent to a third-party cloud unless you configure it, and the system is designed to be self-hosted by default.
-- **Won’t rot** – A scheduled “crunch” process tidies fragmented or outdated documents, and the gap-detection loop proactively identifies missing coverage.
+- **Won’t rot** – Scheduled patrols (fix-patrol, improve-patrol) verify claims, deduplicate, split bloated files, and grow thin documents on rolling cursors — keeping the knowledge base fresh without a manual editorial pass.
 
 ### Git-Backed, Vendor-Neutral
 Magpie is “a vendor-neutral knowledge maintenance system for Git-backed Markdown documentation” (source: [`README.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/README.md)). It does not lock you into a proprietary format or platform. Sources and destinations can be any Git repository, and the product’s core packages define provider-neutral interfaces for chat, embeddings, and git operations (source: [`docs/architecture.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/docs/architecture.md)). This portability means you can switch AI providers, hosting, or deployment targets without rewriting content.
@@ -52,6 +52,6 @@ Proposals are not just drafts — they are written to a Git branch and can be ra
 | **Answer confidence** | Cited with confidence, gaps flagged | Often no confidence indication |
 | **Update mechanism** | Auto-drafted PRs → human review | Manual editing, no automation |
 | **Vendor lock-in** | None – provider-neutral interfaces | Often tied to one AI/cloud vendor |
-| **Freshness** | Scheduled crunch + gap→PR loop | Manual or no automated check |
+| **Freshness** | Scheduled patrols + gap→PR loop | Manual or no automated check |
 
 The combination of Git-backed integrity, automated gap detection, provider neutrality, and a human-in-the-loop PR workflow makes Markdown Magpie uniquely suited for teams that want AI-assisted documentation without sacrificing control, accuracy, or ownership.
