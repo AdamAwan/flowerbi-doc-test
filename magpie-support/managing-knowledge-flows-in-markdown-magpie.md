@@ -86,6 +86,37 @@ OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
 OPENAI_COMPATIBLE_API_KEY=sk-...
 ```
 
+## The Watcher and AI Job Execution
+
+All AI work in Magpie is modeled as jobs on a pg-boss queue in Postgres, not as a hard dependency on one model vendor. **The API never calls a model inline.** It enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access.
+
+### Job States
+
+A job moves through these states (mirroring pg-boss):
+
+`created` → `active` → `completed` (terminal). Other states: `retry` (queued for another attempt after a recoverable failure), `failed` (terminal, retries exhausted), `cancelled` (terminal, cancelled by an operator), `blocked` (waiting on a dependency / singleton key).
+
+### Watcher Capabilities
+
+A watcher advertises a **capability** for each provider whose credentials are present in its environment, plus `maintenance` (always available). The API only routes a job to a capability a running watcher actually offers, so a job stays queued until a capable watcher is running.
+
+| Capability | Required env |
+| --- | --- |
+| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
+| `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
+| `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+| `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
+| `maintenance` | (none) |
+
+### Client Flow
+
+The standard request/await pattern for any job-backed endpoint:
+
+1. `POST` the work — the API returns **`202`** with the created job and links.
+2. `GET /api/jobs/:id/wait` — long-polls. Returns **`200`** once the job is terminal, or **`202`** if it is still running.
+3. `GET /api/jobs/:id` — fetch the job snapshot at any time without blocking.
+
 ## Indexing a Flow
 
 Once a flow is configured, you must index its destination before users can ask questions. Indexing parses Markdown files, extracts sections, and (optionally) generates embeddings.
@@ -115,7 +146,7 @@ Navigate to **Knowledge > Repositories** in the web console. Click the **Index**
 
 ### After Indexing
 
-The API automatically runs background embedding for any section whose vector is missing. In `direct` mode, questions are answered synchronously. In `queue` mode, a watcher must be running to process answer jobs.
+The API automatically runs background embedding for any section whose vector is missing. Embedding runs inside the API process — no separate watcher is needed for this step. When embeddings are configured, retrieval becomes **hybrid** (a pgvector nearest-neighbour search fused with keyword scoring via Reciprocal Rank Fusion). Otherwise, keyword-only scoring is used. The active retrieval mode is reported by `GET /api/config`.
 
 ## Viewing Flow Status
 
@@ -198,7 +229,7 @@ If a document has become obsolete or inconsistent, the scheduled **fix-patrol** 
 
 ### Source Change Sync
 
-The `source-change-sync` background job (scheduled by default every 10 minutes) watches each flow's git sources. When a source has new commits, it rewrites the corresponding destination documents and re-indexes them. Source-sync changes now flow through the same proposal model as gap drafts, so they can fold into existing open PRs. You can disable this in the Schedules settings page if you prefer manual control.
+The `source-change-sync` background job (scheduled by default every 10 minutes) watches each flow's git sources. When a source has new commits, it rewrites the corresponding destination documents and re-indexes them. This is an **event-driven** job: the trigger is the source commit, and its scope is limited to the diff plus the documents that cite that area. Source-sync changes now flow through the same proposal model as gap drafts, so they can fold into existing open PRs. You can disable this in the Schedules settings page if you prefer manual control.
 
 ### Manual Re-index
 
@@ -230,6 +261,23 @@ Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-conf
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
 
+### Proposal Lifecycle
+
+A proposal moves through these statuses: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready`, it can be published:
+
+```bash
+POST /api/proposals/:id/status
+{ "status": "ready" }
+
+POST /api/proposals/:id/publish
+```
+
+Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch, pushes it, and opens a pull request. The proposal records the branch, commit SHA, and PR URL. If no host token is available, it degrades gracefully to a pushed branch.
+
+### Gap Clusters
+
+The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
+
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
 Rather than a single whole-knowledge-base crunch, Magpie now runs several **patrol** lenses on a rolling cursor. Each scheduled tick selects the least-recently-checked documents in a flow and runs one or more lenses over them:
@@ -241,9 +289,13 @@ Rather than a single whole-knowledge-base crunch, Magpie now runs several **patr
   - **Split** – breaks overgrown documents into focused pieces.
 - **Improve-patrol** – editorial growth; source-grounded expansions for fine-but-thin documents.
 
-Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise).
+Each patrol produces a `MaintenanceRun` record surfaced in the Schedules page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
 
 Patrol schedules can be enabled/disabled per flow and cron expression via the **Schedules** page in the web console.
+
+### Patrol Trigger
+
+The patrol uses a rolling cursor: each tick picks the N least-recently-checked files (or files past a staleness threshold) and runs the lenses on them. This rotates through the whole KB over days with bounded cost per tick, and naturally re-visits files as they age.
 
 ## Verifying the Knowledge Base State
 
@@ -286,7 +338,7 @@ curl -s http://localhost:4000/api/knowledge/documents
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API. |
 | “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions. |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set. |
-| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process. |
+| `/api/ask` returns 202 (queued) | Normal for queue-only mode; job never completes if watcher not running | Start a watcher process. |
 
 ## Reference
 
