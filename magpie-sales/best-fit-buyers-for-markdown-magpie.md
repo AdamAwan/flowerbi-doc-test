@@ -37,21 +37,33 @@ IT operations and DevOps teams maintain runbooks, incident response guides, and 
 
 Dedicated documentation teams that write Markdown — whether for hardware, software, or processes — benefit from gap detection and automated PR generation, reducing manual review cycles.
 
+### Internal Knowledge Management
+
+Any organization that uses Git-based wikis or documentation repositories for internal processes, compliance, or training can adopt Markdown Magpie to keep that knowledge accurate and complete.
+
+### Consulting and Professional Services
+
+Teams that produce client-facing or internal knowledge bases and need to keep them current with minimal manual effort find value in the automated maintenance and proposal generation.
+
 ### Engineering-Led Organizations in Any Sector
 
 Any company with an engineering team that uses Git for documentation (e.g., architecture decisions, coding standards, project wikis) can adopt Markdown Magpie. Sectors like fintech, healthcare, and manufacturing with internal development teams are strong candidates.
 
+### Tech-Forward Enterprises
+
+Large companies with multiple product documentation sets where review cycles and Git workflows are already established are a natural fit.
+
 ## Company Sizes
 
-### Mid-Sized to Large Teams (50–500+ engineers)
+### Small Teams (5–50 employees or knowledge contributors)
 
-The best fit is organizations where multiple teams maintain documentation across several repositories. Manual knowledge maintenance becomes unmanageable at this scale. Markdown Magpie's gap detection and proposal workflow reduces the burden on individual contributors and documentation maintainers. Features like Crunch (consolidation and splitting of documents) address fragmentation common in larger codebases.
+These teams are a primary audience. Startups (10–50 employees) moving fast and accumulating documentation debt benefit especially from automated gap detection and proposal generation. Smaller teams with a strong documentation culture and a single repository can also benefit, especially if they are early adopters of knowledge-management automation. The product's low overhead (Docker Compose, npm dev loop) makes it accessible.
 
-### Smaller Teams (5–50 engineers)
+### Mid-Sized Teams (50–500 employees)
 
-Smaller teams with a strong documentation culture and a single repository can also benefit, especially if they are early adopters of knowledge-management automation. The product's low overhead (Docker Compose, npm dev loop) makes it accessible to startups. However, the return on investment grows with the number of documents, questions, and contributors.
+Teams that have adopted Git and Markdown for docs but struggle to keep content comprehensive and up to date. At this scale, manual knowledge maintenance becomes unmanageable. Markdown Magpie's gap detection and proposal workflow reduces the burden on individual contributors and documentation maintainers. Features like Crunch (consolidation and splitting of documents) address fragmentation common in larger codebases.
 
-### Large Enterprises (500+ engineers)
+### Large Enterprises (500+ employees)
 
 Large enterprises with dedicated documentation teams and multiple documentation repositories are an ideal segment. Markdown Magpie's provider-neutral design (Azure, OpenAI, GitHub, etc.) and optional authentication (Auth0) align with enterprise compliance and infrastructure requirements. The automated gap reconciler and scheduled Crunch passes reduce manual toil across hundreds of documents.
 
@@ -61,11 +73,17 @@ Large enterprises with dedicated documentation teams and multiple documentation 
 - **Scale of gaps**: Larger teams generate more questions and expose more documentation gaps. The clustering and proposal generation become more valuable as volume grows.
 - **Provider-neutrality**: No vendor lock-in appeals to enterprises that want to use Azure or existing OpenAI-compatible endpoints.
 - **Low operational cost**: The product is designed to be cheap and owned by the team ("cheap & yours" pitch), resonating with budget-conscious teams and those that prefer self-hosting.
+- **Vendor-neutral**: Works with any Git provider (GitHub, GitLab, Azure DevOps) and any AI provider.
+- **Deployment simplicity**: Single Docker Compose file or npm-based local dev; no cloud dependency required for operation.
+- **Extensible**: Provider strategy (mock, OpenAI-compatible, Azure OpenAI) allows cost control and choice.
 
-## Exclusions
+## Exclusions and Out of Scope
 
 - **Teams that do not use Markdown or Git** for documentation are unlikely to adopt Markdown Magpie without significant adaptation.
 - **Single-document or static-site-only documentation** may see limited benefit, as the gap detection and proposal loop is most effective on evolving, multi-repository documentation.
+- **Physical product documentation** (hardware manuals) – unless expressed in Markdown and Git.
+- **Regulated industries with strict document control** (e.g., pharmaceutical, aerospace) – the automated PR workflow may need additional compliance validation before adoption.
+- **Non-technical teams without Git familiarity** – Magpie assumes users are comfortable with Git, Markdown, and PR workflows.
 
 ---
 
