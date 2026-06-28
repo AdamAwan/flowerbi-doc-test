@@ -27,22 +27,26 @@ For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` a
 
 ### Supported Source Kinds
 
-- `local`: A folder on the server (e.g., `knowledge-bases/cats`).
-- `git`: A remote Git repository, optionally with `subpath`.
-- `internet`: A public URL returning Markdown (fetched at index time).
-- `agent`: Knowledge captured from agent interactions (not indexed for answering).
+| Kind | Configuration | Example | Notes |
+|------|---------------|---------|-------|
+| `local` | A folder on the server (e.g., `knowledge-bases/cats`). | `{"id":"docs","kind":"local","path":"knowledge-bases/product"}` | – |
+| `git` | A remote Git repository, optionally with `subpath`. | `{"id":"flowerbi","url":"https://github.com/example/flowerbi.git","subpath":"src"}` | – |
+| `internet` | A public URL returning Markdown (fetched at index time). | `{"id":"docs","kind":"internet","url":"https://example.com/docs"}` | Used for drafting proposals only; **not indexed** into the answer corpus. |
+| `agent` | Knowledge captured from agent interactions (e.g., Codex, Claude). | `{"id":"agent","kind":"agent"}` | Used for drafting proposals only; **not indexed** for answering. |
+
+Only destinations (curated knowledge bases) are indexed for answering questions.
 
 ## AI Provider Configuration
 
 Set `AI_PROVIDER` to one of the following and configure the corresponding variables:
 
-| Provider | `AI_PROVIDER` value | Required Variables |
-|---|---|---|
-| Mock (deterministic) | `mock` | None |
-| OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
-| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` |
-| Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` |
-| Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` |
+| Provider | `AI_PROVIDER` value | Required Variables | Notes |
+|---|---|---|---|
+| Mock (deterministic) | `mock` | None | |
+| OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | |
+| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | |
+| Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` | `CODEX_CLI_PATH` defaults to `codex` on `PATH` if unset. |
+| Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` | `CLAUDE_CLI_PATH` defaults to `claude` on `PATH` if unset. |
 
 **Execution Modes**
 
@@ -68,6 +72,20 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 
 Embeddings require `KNOWLEDGE_STORE=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
 
+Note: `EMBEDDING_PROVIDER` is an informational variable only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting embedding credentials is what activates them.
+
+## Job Queue Configuration
+
+All AI work is enqueued to a pg‑boss queue in Postgres. The API never calls a model inline; a separate watcher claims and completes jobs. The following variables control job queue behaviour:
+
+| Variable | Description | Default |
+|---|---|---|
+| `JOB_WAIT_TIMEOUT_MS` | Maximum time (ms) for a single long‑poll wait call on a job. | (not set) |
+| `JOB_WAIT_POLL_MS` | Server‑side poll interval (ms) when waiting for a job to complete. | (not set) |
+| `JOB_SCHEDULE_TIMEZONE` | Timezone for scheduled jobs (e.g., crunch). | `UTC` |
+
+Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
+
 ## Storage Backend Configuration
 
 | Backend | Variable | Value |
@@ -81,11 +99,11 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 | Provider | Required Variable |
 |---|---|---|
-| GitHub | `GITHUB_TOKEN` |
+| GitHub | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | GitLab (planned) | `GITLAB_TOKEN` |
 | Azure DevOps (planned) | `AZURE_DEVOPS_TOKEN` |
 
-If no token is set, proposals are pushed to a branch but no PR is created.
+`MAGPIE_GIT_AUTHOR_NAME` and `MAGPIE_GIT_AUTHOR_EMAIL` are used as the Git author identity when creating commits and pull requests. If no token is set, proposals are pushed to a branch but no PR is created.
 
 ## Authentication (Auth0 / Entra ID)
 
@@ -135,4 +153,4 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 The default production shape is Docker Compose.
 
 ---
-*This reference consolidates content from the Getting Started, Integrations, Flows, and Permissions documents.*
+*This reference consolidates content from the Getting Started, Integrations, Flows, and Permissions documents. For detailed guides and step-by-step instructions, see [Integrations and Connecting Data Sources](integrations-and-connecting-data-sources.md).*
