@@ -25,7 +25,7 @@ Markdown Magpie is **vendor‑neutral, Git‑backed, and focused on knowledge ma
 3. **Proposal generation & pull requests** – for each gap cluster, Markdown Magpie can draft a Markdown proposal and open a Git pull request for human review. This closes the loop between “we don’t know this” and “the knowledge base is now complete.”
 4. **Vendor‑neutral provider strategy** – chat, embeddings, and AI job execution are all behind interfaces. You can swap OpenAI for DeepSeek, Azure for local models, or run a watcher with Claude Code. The system does not lock you into any single AI vendor (see [chat-providers.md](chat-providers.md)).
 5. **“Won’t leak”** – content stays in your Git repositories and your own infrastructure. Deployment is via Docker Compose; optional managed services (like Azure) are adapters, not requirements. No third party gets access to your knowledge base.
-6. **“Won’t rot”** – the scheduled `gaps-to-pull-requests` and `source-change-sync` tasks continuously improve and refresh the knowledge base. Crunch fights fragmentation by consolidating or splitting documents (see [ai-jobs.md](ai-jobs.md)).
+6. **“Won’t rot”** – the scheduled `fix-patrol`, `improve-patrol`, `gaps-to-pull-requests` and `source-change-sync` tasks continuously improve and refresh the knowledge base. The patrol lenses check correctness (verify, dedupe, split) and grow fine-but-thin documents on rolling cursors, preventing fragmentation without a whole-KB crunch pass.
 7. **“Cheap & yours”** – the core is open‑source and runs on your own infrastructure. There are no per‑user licensing fees or hosted‑only features.
 
 ## Summary

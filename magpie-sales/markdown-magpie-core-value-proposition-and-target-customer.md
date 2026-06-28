@@ -39,7 +39,6 @@ Concrete examples of target users:
 - **Product engineering teams** maintaining API docs, user guides, or developer onboarding material.
 - **Customer success or support teams** with an internal knowledge base they need to keep current.
 - **Open‑source projects** that want to automatically surface gaps in their contributor documentation.
-
 The solution is designed for teams of moderate size (e.g. 5–50 contributors) who already use Git and Markdown and are comfortable with pull‑request workflows. It is less suited to teams that publish documentation exclusively through a CMS or wiki, or those without a Git‑based editing process.
 
 ## How It Works (Briefly)
@@ -49,7 +48,7 @@ The solution is designed for teams of moderate size (e.g. 5–50 contributors) w
 3. **Answer** — When a question is asked (via API, MCP, or web UI), it retrieves relevant sections and synthesises a cited answer using a configurable AI provider.
 4. **Detect gaps** — Low‑confidence answers are logged and clustered into knowledge‑gap topics.
 5. **Propose fixes** — The system generates draft Markdown additions or edits and opens a pull request for human review.
-6. **Maintain** — Scheduled jobs (crunch, source‑change sync) keep the knowledge base tidied and in sync with its source repositories.
+6. **Maintain** — Scheduled jobs (fix-patrol, improve-patrol, source‑change sync) keep the knowledge base correct and tidy via rolling cursor checks.
 
 ## Background and Rationale
 
