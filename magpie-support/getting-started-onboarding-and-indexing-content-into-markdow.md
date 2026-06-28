@@ -2,7 +2,7 @@
 title: Getting Started: Onboarding and Indexing Content into Markdown Magpie
 owner: magpie-ops
 status: draft
-tags: [getting-started, onboarding, indexing]
+tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
@@ -115,6 +115,17 @@ KNOWLEDGE_FLOWS=[{"id":"product","name":"Product KB","sourceIds":["product"],"de
 ```
 
 For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported but the explicit source/destination/flow model is preferred.
+
+> **Example with a local source (for testing):** If you prefer a quick local setup without a remote Git repository, you can use the following configuration:
+>
+> ```env
+> MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+> KNOWLEDGE_SOURCES=[{"id":"cats","name":"Cat Care Repo","kind":"local","path":"knowledge-bases/cats"}]
+> KNOWLEDGE_DESTINATIONS=[{"id":"cats-docs","name":"Cat Care Docs","url":"https://github.com/your-org/cats-docs.git","subpath":"docs"}]
+> KNOWLEDGE_FLOWS=[{"id":"cats","name":"Cat Care KB","sourceIds":["cats"],"destinationId":"cats-docs"}]
+> ```
+>
+> Then create the `knowledge-bases/cats` folder and add some Markdown files. This is useful for trying out the system without needing a remote Git repository.
 
 Make sure `MAGPIE_CHECKOUT_ROOT` points to a writable directory where cloned repositories will be stored:
 
@@ -254,8 +265,10 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 
 - Learn about [knowledge gap detection and proposals](managing-knowledge-flows-in-markdown-magpie.md#the-gap-pipeline-and-flows).
 - Set up [real AI providers](integrations-and-connecting-data-sources.md#ai-provider-integrations) instead of `mock`.
+- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality (from the Quick Start guide).
 - Configure automated [patrol maintenance](managing-knowledge-flows-in-markdown-magpie.md#patrol-maintenance-scheduled-knowledge-base-tidying) for knowledge base tidying.
 - Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
+- Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
 
 ---
 
@@ -264,3 +277,4 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - [Markdown Ingestion](managing-knowledge-flows-in-markdown-magpie.md) – detailed source/destination/flow configuration.
 - [HTTP API Reference](managing-knowledge-flows-in-markdown-magpie.md#api-endpoints) – all API endpoints for indexing and searching.
 - [Architecture](managing-knowledge-flows-in-markdown-magpie.md) – high-level system design and provider strategy.
+- [Configuration Reference](configuration-reference.md) – comprehensive documentation of all environment variables.
