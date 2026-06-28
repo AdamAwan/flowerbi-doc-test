@@ -13,7 +13,7 @@ Authentication is provided by the `@magpie/auth` package, which validates JSON W
 
 - **Auth0 configuration** – When `AUTH_REQUIRED=true`, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`).
 - **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
-- **Local development** – With `AUTH_REQUIRED=false` (the default), no token is required. All endpoints are open.
+- **Local development** – With `AUTH_REQUIRED=false` (the default), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`, and `MCP_API_AUTH_TOKEN`) are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials are configured.)
 
 ## API‑Level Access Control
 
@@ -43,6 +43,18 @@ Each MCP tool requires a specific OAuth scope. The token presented by the client
 | `kb.feedback` | `feedback:questions` |
 
 If the token lacks the required scope, the server returns a `403 Forbidden` response. Tools that do not require special scopes (e.g., `initialize`, `tools/list`) need only a valid token.
+
+## Web Console Authentication
+
+The web administration console (port 3000) also validates Auth0-issued tokens when authentication is enabled. It uses the `@auth0/auth0-react` React SDK to handle login, logout, and token acquisition. The console requires the following environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_AUTH0_ISSUER` | Auth0 issuer URL for the browser-side SDK. |
+| `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Auth0 client ID for the web application. |
+| `NEXT_PUBLIC_AUTH0_AUDIENCE` | Expected API audience (must match `AUTH0_AUDIENCE`). |
+
+When `AUTH_REQUIRED=false`, the web console skips authentication and operates without login. In production deployments, set these variables to match the Auth0 application registered for the web console.
 
 ### Auth Variables Summary
 
@@ -91,6 +103,7 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 - In production, enable authentication via Auth0 (or Entra ID) using the `AUTH_REQUIRED` flag.
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
+- The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
 
 ---
 
