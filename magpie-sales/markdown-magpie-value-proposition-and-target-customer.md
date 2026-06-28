@@ -7,7 +7,7 @@ status: draft
 
 ## Who We Are
 
-Markdown Magpie is a **vendor-neutral knowledge maintenance system** for Git-backed Markdown documentation. It answers questions with citations, records where the knowledge base is weak, proposes Markdown changes, and raises pull requests for human review — all without locking your documentation into any single platform or AI provider.
+Markdown Magpie is a **vendor-neutral knowledge maintenance system** for Git-backed Markdown documentation. It answers questions with citations, records where the knowledge base is weak, proposes Markdown changes, and raises pull requests for human review — all without locking your documentation into any single platform or AI provider. The system is designed to be **cheap & yours** — running on your own infrastructure with no vendor lock-in and no data leakage.
 
 ## The Core Value Proposition: "Won't Lie · Won't Leak · Won't Rot"
 
@@ -62,6 +62,14 @@ Markdown Magpie is built for **teams that live in Git** and rely on Markdown for
 - They already use Claude Code, Copilot, or similar tools but want a structured way to close knowledge gaps.
 - They value the human-in-the-loop model: Markdown Magpie drafts proposals, a human reviews and merges.
 
+Concrete examples of target users include:
+- **Internal platform or DevOps teams** documenting runbooks, deployment procedures, and troubleshooting guides.
+- **Product engineering teams** maintaining API docs, user guides, or developer onboarding material.
+- **Customer success or support teams** with an internal knowledge base they need to keep current.
+- **Open‑source projects** that want to automatically surface gaps in their contributor documentation.
+
+The solution is designed for teams of moderate size (e.g. 5–50 contributors) who already use Git and Markdown and are comfortable with pull‑request workflows. It is less suited to teams that publish documentation exclusively through a CMS or wiki, or those without a Git‑based editing process.
+
 ## Key Differentiators
 
 | Feature | What it means for you |
@@ -79,6 +87,26 @@ Markdown Magpie is built for **teams that live in Git** and rely on Markdown for
 - **Keeping runbooks current** — When procedures change, the system detects gaps and proposes updates.
 - **Open-source community Q&A** — A self-hosted knowledge base that answers accurately without exposing private data.
 - **Preventing documentation drift** — Automated gap clustering flags missing topics before they become stale.
+
+## How It Works (Detailed)
+
+1. **Sync** — The system mirrors a Git repository of Markdown files (the “knowledge base”).
+2. **Index** — It parses frontmatter, splits documents by heading, and indexes sections for both keyword and vector retrieval.
+3. **Answer** — When a question is asked (via API, MCP, or web UI), it retrieves relevant sections and synthesises a cited answer using a configurable AI provider.
+4. **Detect gaps** — Low‑confidence answers are logged and clustered into knowledge‑gap topics.
+5. **Propose fixes** — The system generates draft Markdown additions or edits and opens a pull request for human review.
+6. **Maintain** — Scheduled jobs (fix-patrol, improve-patrol, source‑change sync) keep the knowledge base correct and tidy via rolling cursor checks.
+
+## Background and Rationale
+
+This article was originally written to address the question “What is Magpie’s core value proposition and who is the target customer?” — a gap identified as having no source material in the existing knowledge base. The content is synthesised from the project’s own documentation:
+
+- [`README.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/README.md) describes the product loop and the “won’t lie, won’t leak, won’t rot” narrative.
+- [`presentation/README.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/presentation/README.md) documents the pitch deck and its core messages.
+- [`docs/architecture.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/docs/architecture.md) details the provider‑neutral design and the human‑in‑the‑loop workflow.
+- [`docs/ingestion.md`](https://github.com/AdamAwan/markdown-magpie/blob/main/docs/ingestion.md) explains how sources and destinations are configured, reinforcing the “yours” aspect.
+
+This article is intended for the `magpie-sales-docs` knowledge base and should be reviewed and iterated upon by the product team.
 
 ## Summary
 
