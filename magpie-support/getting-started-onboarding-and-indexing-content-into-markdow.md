@@ -8,6 +8,8 @@ review_cycle_days: 90
 
 > **Note:** This guide consolidates the earlier [Quick Start](quick-start.md) document, which is now deprecated. For the most current instructions, please refer to this document.
 
+> **Important:** Markdown Magpie uses a queue-only architecture by default. The API enqueues AI jobs that a separate **watcher** process claims and completes. This guide includes starting the watcher in a dedicated step. Without it, questions will stay queued and never be answered. If you prefer synchronous (direct) execution, set `AI_EXECUTION_MODE=direct` and skip Step 7.
+
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
 This guide explains how to get your Markdown content into Markdown Magpie so it can answer questions with citations, detect knowledge gaps, and propose improvements. You will:
@@ -20,7 +22,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 ## Prerequisites
 
 - Node.js 22+ and npm 10 (if npm 11 fails, use `npx --yes npm@10 ci`).
-- Docker and Docker Compose (for Postgres and Redis).
+- Docker and Docker Compose (for Postgres and optional Redis).
 - A Git repository with Markdown files you want to manage.
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
@@ -57,17 +59,16 @@ Edit `.env` to set at minimum:
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
-AI_EXECUTION_MODE=direct
+AI_EXECUTION_MODE=queue
 AI_PROVIDER=mock
+AUTH_REQUIRED=false
 ```
 
 > **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
+> 
+> **Note:** `AI_EXECUTION_MODE=queue` is the default for production. For synchronous answers (no watcher), set `AI_EXECUTION_MODE=direct`. If you prefer the queue‑only architecture (useful for production or to test the watcher), keep `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later). The rest of this guide assumes `queue` mode.
 
-> **Note:** `AI_EXECUTION_MODE=direct` means the API calls the AI model synchronously. For asynchronous queue-based execution, set `AI_EXECUTION_MODE=queue` and start the watcher (see [Start the Watcher](#7-start-the-watcher-required-for-queue-mode)). If you prefer the queue‑only architecture (useful for production or to test the watcher), set `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later).
-
-For local development, you can also set `AUTH_REQUIRED=false` to disable authentication so the API and watcher can communicate without credentials.
-
-## 3. Start Dependencies (Postgres + Redis)
+## 3. Start Dependencies (Postgres + Redis optional)
 
 The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers:
 
@@ -160,14 +161,14 @@ curl localhost:4000/api/health
 
 ## 7. Start the Watcher (Required for Queue Mode)
 
-Markdown Magpie uses a queue-only architecture: the API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. If you set `AI_EXECUTION_MODE=queue` in your environment, you **must** start the watcher in a separate terminal so it can claim and complete AI jobs:
+If you set `AI_EXECUTION_MODE=queue`, start the watcher in a separate terminal so it can claim and complete AI jobs:
 
 ```bash
 AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 ```
 
-> The watcher is **required** for all generative work: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The mock provider works out of the box — no additional credentials needed.
+> The watcher is **required** for all generative work when in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The mock provider works out of the box — no additional credentials needed.
 
 If you use `AI_EXECUTION_MODE=direct` (the default), questions are answered synchronously and no watcher is needed.
 
@@ -195,6 +196,8 @@ The API will:
 3. Store sections in the in‑memory search index and persist them to Postgres.
 4. Kick off a background task to embed any sections whose embedding is `NULL` (if an embeddings provider is configured).
 
+After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
+
 The POST request returns a summary:
 
 ```json
@@ -206,31 +209,9 @@ The POST request returns a summary:
 }
 ```
 
-> **Note:** The API indexes the **destination** of a flow, not the raw source. The `flowId` must match an entry in `KNOWLEDGE_FLOWS`. After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
+> **Note:** The API indexes the **destination** of a flow, not the raw source. The `flowId` must match an entry in `KNOWLEDGE_FLOWS`.
 
-## 9. Verify Indexing
-
-Check that your documents are indexed:
-
-```bash
-curl -s http://localhost:4000/api/knowledge/stats
-```
-
-```json
-{
-  "repositoryCount": 1,
-  "documentCount": 8,
-  "sectionCount": 32
-}
-```
-
-Search for a term:
-
-```bash
-curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
-```
-
-Ask a test question:
+## 9. Ask a Question
 
 In **direct** mode (the default), the API responds synchronously:
 
@@ -253,7 +234,31 @@ curl -s "http://localhost:4000/api/questions/<question-id>"
 
 > **Note:** The `/ask` endpoint is **enqueue-only** when in queue mode: it records the question, returns `202` with a job ID, and enqueues an `answer_question` job for the watcher. To wait for the answer, use the `wait` link. The question ID is returned as `questionId` in the 202 response.
 
-## 10. (Optional) Start the Web Console
+## 10. Verify Indexing
+
+Check that your documents are indexed:
+
+```bash
+curl -s http://localhost:4000/api/knowledge/stats
+```
+
+```json
+{
+  "repositoryCount": 1,
+  "documentCount": 8,
+  "sectionCount": 32
+}
+```
+
+Search for a term:
+
+```bash
+curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
+```
+
+Ask a test question (see Step 9).
+
+## 11. (Optional) Start the Web Console
 
 In a separate terminal, start the Next.js web app:
 
