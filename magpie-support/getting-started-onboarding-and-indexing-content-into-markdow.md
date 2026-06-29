@@ -6,7 +6,9 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (async with a watcher). This guide consolidates the original Quick Start guide. For the most current instructions, refer to this document. If you are using `queue` mode, you must start the watcher (Step 7). For `direct` mode, skip Step 7.
+> **Note:** This guide consolidates the original Quick Start guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
+
+> **Architecture note:** Markdown Magpie supports two execution modes. In `direct` mode (default), the API calls the AI model synchronously and answers are returned immediately. In `queue` mode, the API enqueues jobs that a separate **watcher** process claims and completes. If you use queue mode, you must also start the watcher (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The examples in this guide use direct mode unless otherwise noted.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -25,7 +27,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
-- **Watcher (required for queue mode):** If you set `AI_EXECUTION_MODE=queue`, you must also run the watcher process (see [Start the Watcher](#7-start-the-watcher-required-for-queue-mode)). The default `direct` mode does not require a watcher.
+- **Watcher (required for queue mode):** If you set `AI_EXECUTION_MODE=queue`, you must also run the watcher process (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The default `direct` mode does not require a watcher.
 
 > **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank.
 
@@ -57,14 +59,13 @@ Edit `.env` to set at minimum:
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
-AI_EXECUTION_MODE=queue
+AI_EXECUTION_MODE=direct
 AI_PROVIDER=mock
-AUTH_REQUIRED=false
 ```
 
 > **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
 > 
-> **Note:** The example above sets `AI_EXECUTION_MODE=queue` (default for production). For synchronous answers (no watcher), set `AI_EXECUTION_MODE=direct` and skip Step 7. If you prefer the queue‑only architecture, keep `queue` and `AUTH_REQUIRED=false` (see the watcher step later).
+> **Note:** The example above sets `AI_EXECUTION_MODE=direct` (the default). For queue mode (async with watcher), set `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later).
 
 ## 3. Start Dependencies (Postgres + Redis optional)
 

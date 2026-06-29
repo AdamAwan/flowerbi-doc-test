@@ -1,12 +1,12 @@
 ---
-title: Quick Start (Consolidated)
+title: Quick Start — Legacy Reference (Consolidated)
 owner: magpie-ops
 status: archived
-tags: [getting-started, quickstart, deprecated]
+tags: [getting-started, quickstart, deprecated, old, superseded]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide has been consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) document. The following content is retained for reference; please refer to the Getting Started guide for the most current instructions. This page now serves as a cross-reference only.
+> **Note:** This guide has been consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) document. The watcher information and all setup steps are now fully covered there. This page serves as a legacy cross-reference only.
 
 For quick reference, the main steps are:
 1. Clone and install
