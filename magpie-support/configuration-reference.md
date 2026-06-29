@@ -153,4 +153,4 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 The default production shape is Docker Compose.
 
 ---
-*This reference consolidates content from the Getting Started, Integrations, Flows, and Permissions documents. For step-by-step instructions on connecting a new data source, managing flows, and understanding the product loop, see [Managing Knowledge Flows](managing-knowledge-flows-in-markdown-magpie.md).*
+*This reference consolidates content from the Getting Started, Integrations, Flows, and Permissions documents. For detailed guides and step-by-step instructions, see [Managing Knowledge Flows](managing-knowledge-flows-in-markdown-magpie.md) and [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md).*
