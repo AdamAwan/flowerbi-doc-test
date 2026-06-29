@@ -15,7 +15,9 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - Index your Markdown content.
 - Verify that indexing succeeded.
 
-> **Note:** This guide replaces the older [Quick Start](quick-start.md), which is no longer maintained. Refer to this document for the most current instructions.
+> **Note:** This guide replaces the older [Quick Start](quick-start.md), which has been removed. All content has been reviewed and reconciled. Refer to this document for the most current instructions.
+
+> **Important:** Markdown Magpie uses a queue-only architecture by default when `AI_EXECUTION_MODE=queue` (or unset). The API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. This guide covers both direct (synchronous) and queue modes. Without the watcher in queue mode, questions will stay queued and never be answered.
 
 ## Prerequisites
 
@@ -26,7 +28,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
 
-> **Redis:** Redis is **not required** for local development. The job queue uses Postgres via pg-boss. If you prefer to use Redis, you can set `QUEUE_URL` and include Redis in `docker compose`. By default, the Docker Compose file includes both Postgres and Redis for compatibility.
+> **Redis:** Redis is **not required** for local development. The job queue uses Postgres via pg-boss. The default Docker Compose file includes both Postgres and Redis for compatibility. If you prefer to use Redis, you can set `QUEUE_URL`. By default, no Redis is needed.
 
 If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
 
@@ -159,6 +161,8 @@ The API will be available at `http://localhost:4000`. Verify with:
 curl localhost:4000/api/health
 ```
 
+> **Note:** The watcher is required for queue mode (see [Queue Mode](#queue-mode-watcher-based-setup)) and for tasks like proposals and patrol maintenance even in direct mode. If you set `AI_EXECUTION_MODE=direct`, the watcher is not needed for answering questions, but it is still needed for those background tasks.
+
 ## 7. Index Your Content
 
 With the API running, trigger indexing of a configured flow:
@@ -189,7 +193,29 @@ The POST request returns a summary:
 
 > **Note:** The API indexes the **destination** of a flow, not the raw source. The `flowId` must match an entry in `KNOWLEDGE_FLOWS`. After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
 
-## 8. Ask a Question (Default: Direct Mode)
+## 8. Verify Indexing
+
+Check that your documents are indexed:
+
+```bash
+curl -s http://localhost:4000/api/knowledge/stats
+```
+
+```json
+{
+  "repositoryCount": 1,
+  "documentCount": 8,
+  "sectionCount": 32
+}
+```
+
+Search for a term:
+
+```bash
+curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
+```
+
+## 9. Ask a Question (Default: Direct Mode)
 
 In `direct` mode (the default for this guide), the API answers synchronously:
 
@@ -203,13 +229,13 @@ You should receive an answer with citations and a confidence rating.
 
 > **If you enabled queue mode:** See the [Queue Mode](#queue-mode-watcher-based-setup) section for enqueue-only usage.
 
-## Queue Mode (Watcher-Based Setup)
+## 10. Queue Mode (Watcher-Based Setup)
 
 If you set `AI_EXECUTION_MODE=queue` in your `.env`, the API uses a queue-only architecture. The API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. This section explains how to run the watcher and use the enqueue-only API.
 
-### Start the Watcher
+> **Note:** The watcher is **required** for all generative work: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The mock provider works out of the box — no additional credentials needed.
 
-The watcher is **required** for all generative work: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The mock provider works out of the box — no additional credentials needed.
+### Start the Watcher
 
 Start the watcher in a dedicated terminal:
 
@@ -239,29 +265,7 @@ curl -s "http://localhost:4000/api/questions/<question-id>"
 
 The question ID is returned as `questionId` in the 202 response.
 
-## 9. Verify Indexing
-
-Check that your documents are indexed:
-
-```bash
-curl -s http://localhost:4000/api/knowledge/stats
-```
-
-```json
-{
-  "repositoryCount": 1,
-  "documentCount": 8,
-  "sectionCount": 32
-}
-```
-
-Search for a term:
-
-```bash
-curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
-```
-
-## 10. (Optional) Start the Web Console
+## 11. (Optional) Start the Web Console
 
 In a separate terminal, start the Next.js web app:
 
@@ -299,7 +303,9 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - **Embeddings are computed in the background** if an embedding provider is configured.
 - **Retrieval mode** is `keyword` by default. To enable hybrid (keyword + vector) search, configure Postgres with pgvector and an embedding provider.
 - **No bundled knowledge base is provided.** The `knowledge-bases/` directory is intentionally empty; configure your own sources and destinations.
-- **Watcher for queue mode:** If you use `AI_EXECUTION_MODE=queue`, you must start the watcher (see [Queue Mode](#queue-mode-watcher-based-setup)) to process AI jobs. In `direct` mode, no watcher is needed.
+- **Watcher for queue mode:** If you use `AI_EXECUTION_MODE=queue`, you must start the watcher (see [Queue Mode](#queue-mode-watcher-based-setup)) to process AI jobs. In `direct` mode, no watcher is needed for answering questions.
+- **The API is enqueue-only** when in queue mode; in direct mode it answers synchronously.
+- **Watcher also required** for proposals and patrol maintenance even in direct mode.
 
 ## Troubleshooting
 
@@ -312,12 +318,12 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
 | `/ask` returns `202` but never completes (queue mode) | Watcher not running | Start the watcher (see [Queue Mode](#queue-mode-watcher-based-setup)) and retry the question |
-| Watcher logs `Capability … not ready` | Missing environment variables for the provider | Check AI provider environment variables. For mock, no extra variables are needed |
+| Watcher logs `Capability … not ready` | Environment variables for the provider missing | Check AI provider environment variables. For mock, no extra variables are needed |
 | `401` on API calls | Auth required but not configured | Set `AUTH_REQUIRED=false` in `.env` or as an environment variable |
 | Bootstrap fails with permission error | `MAGPIE_CHECKOUT_ROOT` not writable | Override to a writable local path (step 6) |
 | "Failed to sync configured git repositories" | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set |
-| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process |
+| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` in `.env` or start a watcher process |
 
 ## Next Steps
 
