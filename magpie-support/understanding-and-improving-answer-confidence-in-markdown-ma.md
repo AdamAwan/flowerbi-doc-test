@@ -42,7 +42,10 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 
 ## Checking Current Answer Quality
 
-1. **Inspect the answer response:** When you call `POST /api/ask`, the result includes a `confidence` field (`high`, `medium`, or `low`) and a list of `citations` with relevance scores. Low confidence often means zero or very few citations.
+1. **Submit a question and retrieve the answer.** `POST /api/ask` returns `202` with a job object and a `questionId`; the answer is not in this response. To get the final answer:
+   - Poll `GET /api/jobs/<job-id>/wait` — this long-polls until the job is terminal (**`200`** when complete, **`202`** if still running, in which case you re-issue the call).
+   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, or `low`), and citations with relevance scores.
+   Low confidence often means zero or very few citations.
 2. **Review the knowledge base stats:**
    ```bash
    curl http://localhost:4000/api/knowledge/stats
