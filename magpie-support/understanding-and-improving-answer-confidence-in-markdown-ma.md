@@ -42,7 +42,10 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 
 ## Checking Current Answer Quality
 
-1. **Inspect the answer response:** When you call `POST /api/ask`, the result includes a `confidence` field (`high`, `medium`, or `low`) and a list of `citations` with relevance scores. Low confidence often means zero or very few citations.
+1. **Submit a question and retrieve the answer.** `POST /api/ask` returns `202` with a job object and a `questionId`; the answer is not in this response. To get the final answer:
+   - Poll `GET /api/jobs/<job-id>/wait` — this long-polls until the job is terminal (**`200`** when complete, **`202`** if still running, in which case you re-issue the call).
+   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, or `low`), and citations with relevance scores.
+   Low confidence often means zero or very few citations.
 2. **Review the knowledge base stats:**
    ```bash
    curl http://localhost:4000/api/knowledge/stats
@@ -129,12 +132,19 @@ Markdown Magpie splits documents by headings. To improve retrieval:
 
 ### 6. Verify AI Provider and Watcher Configuration
 
-If the answer content itself is poor (not just low confidence), check the chat provider and watcher:
+If the answer content itself is poor (not just low confidence), check the chat provider and watcher.
 
-- Ensure the provider environment variables are set correctly (e.g., `OPENAI_COMPATIBLE_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`). Required variables per capability:
-  - **openai-compatible:** `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL`
-  - **azure-openai:** `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`
+- Ensure the provider environment variables are set correctly. A watcher advertises a **capability** for each provider whose credentials are present in its environment; the API only routes a job to a capability a running watcher actually offers. The table below lists the required environment variables per capability:
+
+| Capability | Required environment variables |
+|---|---|
+| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
+| `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
+| `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+
 - Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
+- You can also check the active capabilities by examining the `ai.runtime.availableProviders` field in the response from `GET /api/config`.
 - Test with a simple question that should be well-covered. If the job stays queued, consult the watcher logs for errors.
 - Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart the watcher. `mock` produces deterministic answers from retrieved context without requiring API keys.
 
