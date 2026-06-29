@@ -1,12 +1,12 @@
 ---
-title: Quick Start — Legacy Reference (Consolidated)
+title: Quick Start — Deprecated (Legacy Reference)
 owner: magpie-ops
 status: archived
-tags: [getting-started, quickstart, deprecated, old, superseded]
+tags: [getting-started, quickstart, deprecated, superseded, old]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide has been consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) document. Please refer to the Getting Started guide for the most current and comprehensive instructions. The content below is retained only for reference and links.
+> **This document has been superseded and consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) guide. The content below is retained only for reference and links. Please refer to the Getting Started guide for the most current and comprehensive instructions.**
 
 For quick reference, the main steps are:
 1. Clone and install
