@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates the original Quick Start guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
+> **Note:** This guide consolidates content from the [Quick Start](quick-start.md) document, which has been deprecated. For the most current instructions, refer to this guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
 
 > **Architecture note:** Markdown Magpie supports two execution modes. In `direct` mode (default), the API calls the AI model synchronously and answers are returned immediately. In `queue` mode, the API enqueues jobs that a separate **watcher** process claims and completes. If you use queue mode, you must also start the watcher (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The examples in this guide use direct mode unless otherwise noted.
 
@@ -54,7 +54,9 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-Edit `.env` to set at minimum:
+Edit `.env` to set at minimum. The exact settings depend on whether you use **direct** or **queue** mode:
+
+### For Direct Mode (default, no watcher needed):
 
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
@@ -64,10 +66,19 @@ AI_PROVIDER=mock
 ```
 
 > **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
-> 
-> **Note:** The example above sets `AI_EXECUTION_MODE=direct` (the default). For queue mode (async with watcher), set `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later).
 
-## 3. Start Dependencies (Postgres + Redis optional)
+### For Queue Mode (requires a watcher process):
+
+```env
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
+STORAGE_BACKEND=postgres
+AI_PROVIDER=mock
+AUTH_REQUIRED=false
+```
+
+> In queue mode, the API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. Set `AUTH_REQUIRED=false` so the API and watcher can communicate without Auth0 credentials.
+
+## 3. Start Dependencies (Postgres + optional Redis)
 
 The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and optionally Redis). Redis is not required for core functionality—the queue uses Postgres via pg-boss. If you prefer not to run Redis, you can comment out the Redis service in `docker-compose.yml` or simply ignore it.
 
@@ -76,6 +87,7 @@ docker compose up -d
 ```
 
 Wait for Postgres to be healthy:
+
 ```bash
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy ]; do sleep 2; done
 ```
@@ -156,6 +168,7 @@ MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:api &
 ```
 
 The API will be available at `http://localhost:4000`. Verify with:
+
 ```bash
 curl localhost:4000/api/health
 ```
@@ -314,7 +327,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | Problem | Likely cause | Solution |
 |---------|--------------|----------|
 | `curl localhost:4000/api/health` fails | API not started or port conflict | Check the terminal running the API; kill other processes on port 4000 |
-| Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` |
+| Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` defined in `KNOWLEDGE_FLOWS` |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `/ask` returns `202` but never completes | The watcher is not running (in queue mode). | Start the watcher (step 7) and retry the question. |
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
@@ -327,12 +340,15 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set |
 | `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process |
+| Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
+| New document not found in search | Index did not run after adding the file | Run index endpoint again. |
+| Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |
 
 ## Next Steps
 
 - Learn about [knowledge gap detection and proposals](managing-knowledge-flows-in-markdown-magpie.md#the-gap-pipeline-and-flows).
 - Set up [real AI providers](integrations-and-connecting-data-sources.md#ai-provider-integrations) instead of `mock`.
-- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality (from the Quick Start guide).
+- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality.
 - Configure automated [patrol maintenance](managing-knowledge-flows-in-markdown-magpie.md#patrol-maintenance-scheduled-knowledge-base-tidying) for knowledge base tidying.
 - Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
 - Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
