@@ -109,6 +109,8 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 For a comprehensive guide covering authentication setup, per-tool MCP scopes, web console auth, and future directions, see [Permissions and Access Controls in Markdown Magpie](permissions-and-access-controls-in-markdown-magpie.md).
 
+Set `AUTH_REQUIRED=true` to enable authentication.
+
 Key variables: `AUTH_REQUIRED`, `AUTH0_ISSUER_BASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `MCP_AUTH_TOKEN`, `MCP_API_AUTH_TOKEN`. See the Permissions document for their complete descriptions.
 
 Set `AUTH_REQUIRED=true` to enable authentication. Then configure one of the following:
