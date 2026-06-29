@@ -45,12 +45,15 @@ KNOWLEDGE_SOURCES=[
 ```
 
 Supported source kinds:
-- `local` – a folder on the server (e.g., `knowledge-bases/product`).
+- `local` – a folder on the server (e.g., `knowledge-bases/product`). Use `path` to point to the folder:
+  ```json
+  {"id":"product-docs","name":"Product Docs","kind":"local","path":"knowledge-bases/product"}
+  ```
 - `git` – a remote Git repository, optionally with a `subpath` to a subfolder.
 - `internet` – a plain HTTP/HTTPS URL that returns Markdown.
 - `agent` – the agent’s own knowledge (no URL needed).
 
-For backwards compatibility, the singular aliases `KNOWLEDGE_SOURCE` and `KNOWLEDGE_DESTINATION` are also accepted when only one source or destination is needed.
+For a single source, `KNOWLEDGE_SOURCES` can be replaced by the alias `SOURCE` (same structure). For backwards compatibility, the singular aliases `KNOWLEDGE_SOURCE` and `KNOWLEDGE_DESTINATION` are also accepted when only one source or destination is needed.
 
 ### Define Destinations
 
@@ -63,6 +66,8 @@ KNOWLEDGE_DESTINATIONS=[
 ```
 
 Destinations are always writable Git repositories that Magpie will publish proposals and edits to.
+
+For a single destination, `KNOWLEDGE_DESTINATIONS` can be replaced by the alias `DESTINATION` (same structure).
 
 ### Define Flows
 
@@ -170,10 +175,23 @@ The API automatically runs background embedding for any section whose vector is 
 - `GET /api/knowledge/repositories` – list all indexed repositories (each corresponds to a flow’s destination).
 - `GET /api/knowledge/stats` – get total document and section counts.
 - `GET /api/knowledge/documents` – list all indexed documents across flows.
+- `GET /api/config` – reports the runtime configuration, including the active retrieval mode (`hybrid` or `keyword`) and AI provider. The retrieval mode is also shown with a plain-language `reason`.
 
 ### Web Console
 
 The **Knowledge** page shows each flow’s index status, including last indexed commit and counts.
+
+### Switching AI Provider at Runtime
+
+The active AI provider can be changed without restarting via `POST /api/config`:
+
+```bash
+curl -X POST http://localhost:4000/api/config \
+  -H 'content-type: application/json' \
+  -d '{"aiProvider":"claude"}'
+```
+
+The provider must be configured in environment variables for the change to be accepted.
 
 ## Managing Documents in the Knowledge Base
 
@@ -205,9 +223,16 @@ git push
 When the gap detector finds missing knowledge, the recommended workflow is:
 
 1. A gap cluster appears via `GET /api/gaps/clusters`.
-2. Generate a proposal from that cluster (either manually or via the scheduled reconciler).
-3. The proposal drafts a Markdown document, commits it to a branch, and opens a pull request.
-4. After review and merge, the new document is part of the destination.
+2. Generate a proposal from that cluster. You can either post the cluster ID to the API or use the scheduled reconciler:
+   ```bash
+   curl -X POST http://localhost:4000/api/proposals/from-gap \
+     -H 'content-type: application/json' \
+     -d '{"summary":"No source material found for: How do I trim claws?","destinationId":"cats-docs"}'
+   ```
+   The API enqueues a `draft_markdown_proposal` job. When the watcher completes it, the generated Markdown is stored as a proposal.
+3. Review the draft proposal via `GET /api/proposals` or the web console's **Proposals** page.
+4. Once `ready`, publish it: the system commits to a branch and (if a host token is configured) opens a pull request.
+5. After review and merge, the new document is part of the destination.
 
 ### Removing Documents
 
@@ -269,10 +294,11 @@ curl -X POST http://localhost:4000/api/admin/reset
 ## The Gap Pipeline and Flows
 
 Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
-1. Groups related gaps into clusters.
+1. Groups related gaps into clusters. Optionally reshapes clusters (merge/split) via a provider‑partitioned AI job — if no chat watcher is available, reshape is skipped.
 2. Drafts Markdown proposals that fill those gaps.
 3. Publishes them to a Git branch in the flow's destination repository.
 4. Opens a pull request (if a token for the remote host is configured) and advances the proposal as the PR is merged.
+5. Checks open pull requests: when a PR merges, the associated gaps are resolved and the knowledge base is re-indexed; if a PR closes without merging, the proposal is marked `rejected`.
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
 
@@ -304,7 +330,7 @@ Rather than a single whole-knowledge-base crunch, Magpie now runs several **patr
   - **Split** – breaks overgrown documents into focused pieces.
 - **Improve-patrol** – editorial growth; source-grounded expansions for fine-but-thin documents.
 
-Each patrol produces a `MaintenanceRun` record surfaced in the Schedules and Activity pages. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
+Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
 
 Patrol schedules can be enabled/disabled per flow and cron expression via the **Schedules** page in the web console.
 
@@ -325,6 +351,13 @@ List all indexed documents:
 
 ```bash
 curl -s http://localhost:4000/api/knowledge/documents
+```
+
+Check the active retrieval mode and provider via `/api/config`:
+
+```bash
+curl -s http://localhost:4000/api/config | jq .retrieval
+# {"mode":"hybrid","reason":"Postgres + embedding credentials configured"}
 ```
 
 ## Best Practices
