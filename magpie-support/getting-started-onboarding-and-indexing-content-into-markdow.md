@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates and replaces the former [Quick Start](quick-start.md) document. Both direct (synchronous) and queue‑based (asynchronous) execution modes are covered below.
+> **Note:** This guide consolidates and replaces the former [Quick Start](quick-start.md) document, serving as the single comprehensive getting-started reference. Both direct (synchronous) and queue‑based (asynchronous) execution modes are covered below.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -165,16 +165,18 @@ curl localhost:4000/api/health
 
 ## 7. Start the Watcher (Required for Queue Mode)
 
-If you are using queue mode (default), start the watcher in a separate terminal so it can claim and complete AI jobs:
+> **Important:** The default for new development is **direct** mode (`AI_EXECUTION_MODE=direct`), which does not require a watcher. If you set `AI_EXECUTION_MODE=queue`, you **must** start the watcher.
+
+For queue mode, start the watcher in a separate terminal:
 
 ```bash
 AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 ```
 
-> The watcher is **required** for all generative work in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be completed. The mock provider works out of the box — no additional credentials needed.
+The watcher is required for all generative work in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be completed. The mock provider works out of the box — no additional credentials needed.
 
-If you are using direct mode (`AI_EXECUTION_MODE=direct`), you can skip this step.
+If you are using direct mode, you can skip this step.
 
 ## 8. Index Your Content
 
