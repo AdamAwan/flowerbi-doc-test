@@ -306,7 +306,7 @@ The reconciler maintains persisted gap clusters, each with an `id`, `title`, `qu
 
 ### Proposal Lifecycle
 
-A proposal moves through these statuses: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready`, it can be published:
+A proposal moves through these statuses: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`, `superseded`. Once a proposal is `ready`, it can be published:
 
 ```bash
 POST /api/proposals/:id/status
