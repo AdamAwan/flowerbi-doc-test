@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates the former [Quick Start](quick-start.md) document. Both direct (synchronous) and queue‑based (asynchronous) execution modes are covered below.
+> **Note:** This guide consolidates and replaces the former [Quick Start](quick-start.md) document. Both direct (synchronous) and queue‑based (asynchronous) execution modes are covered below.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -292,6 +292,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - **Embeddings are computed in the background** if an embedding provider is configured.
 - **Retrieval mode** is `keyword` by default. To enable hybrid (keyword + vector) search, configure Postgres with pgvector and an embedding provider.
 - **No bundled knowledge base is provided.** The `knowledge-bases/` directory is intentionally empty; configure your own sources and destinations.
+- **Markdown Magpie uses a queue‑only architecture when in queue mode**: the API never calls an AI model directly – it enqueues jobs that the watcher process claims and completes.
 
 ## Troubleshooting
 
