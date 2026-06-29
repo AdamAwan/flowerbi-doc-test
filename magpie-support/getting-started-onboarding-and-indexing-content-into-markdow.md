@@ -6,6 +6,8 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
+> **Note:** This guide consolidates the earlier [Quick Start](quick-start.md) document. For the most current instructions, please refer to this document.
+
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
 This guide explains how to get your Markdown content into Markdown Magpie so it can answer questions with citations, detect knowledge gaps, and propose improvements. You will:
@@ -285,6 +287,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `/ask` returns low confidence after indexing | Embeddings may be incomplete | Wait for background embedding pass (step 8 note) |
+| `/ask` returns low confidence in queue mode | Indexing may not be complete, or embeddings are missing | Wait for background embedding to finish and re-index if needed |
 | `/ask` returns `202` but never completes (queue mode) | The watcher is not running | Start the watcher (step 7) and retry the question |
 | Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars; mock needs no extra vars |
 | `401` on API calls | Authentication required locally | Set `AUTH_REQUIRED=false` in `.env` or environment variable |
