@@ -33,7 +33,8 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **The question falls outside the scope of the indexed documents.** The knowledge base may not cover the topic, or the relevant information exists but is not effectively retrievable due to poor document structure or lack of coverage.
 - **The retrieval mode is not optimal.** Keyword-only retrieval limits the ability to match semantically similar content. Hybrid mode (keyword + vector) is recommended for best results.
 - **The embeddings are not generated.** Even with hybrid retrieval enabled, if embeddings have not been computed for indexed sections (e.g., they are still `NULL` in the database), the hybrid fallback may be keyword-only, lowering retrieval quality.
-- **The AI provider or watcher is not running.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. If the watcher is not running, jobs will stay queued and never complete — the answer will never be generated, so the confidence field will remain `unknown` or `low`.
+- **No watcher is running with the required capability.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. If no watcher is running or the watcher does not advertise the required capability (e.g., `openai-compatible`, `azure-openai`), the job stays queued and never completes, resulting in no answer or an answer with unknown confidence. Check the watcher's startup logs for "Capability provider — ready" or similar.
+- **The AI provider is not configured correctly.** The watcher advertises capabilities only when all required environment variables are set for that provider. Missing API keys, base URLs, or model names prevent the watcher from claiming jobs, leading to stalled answers and low confidence.
 - **The question is ambiguous or malformed.** The retrieval pipeline works best with clear, specific questions.
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
 - **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
@@ -47,18 +48,18 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
    curl http://localhost:4000/api/knowledge/stats
    ```
    If `sectionCount` is 0, the index is empty.
-3. **Check retrieval mode:**
+3. **Check retrieval mode and watcher capability:**
    ```bash
    curl http://localhost:4000/api/config
    ```
-   Look for `retrieval.mode` — it should be `hybrid` for best results. If it is `keyword`, consider configuring embeddings.
+   Look for `retrieval.mode` — it should be `hybrid` for best results. Also check `ai.runtime.provider` and `ai.runtime.availableProviders` to see which watcher capabilities are active.
 4. **List gap candidates:**
    ```bash
    curl http://localhost:4000/api/gaps/candidates
    ```
    This shows questions the system has flagged as low-confidence. Repeated similar gaps indicate a knowledge base gap.
-5. **Confirm the watcher is running:**
-   The watcher must be active for answer jobs to complete. If questions stay queued, check that a watcher process is running and that its startup log shows `Capability provider — ready`.
+5. **Monitor watcher logs and confirm the watcher is running:**
+   The watcher logs on startup which capabilities are ready. If `Capability provider — ready` is missing, verify the provider credentials. Also confirm a watcher process is running (e.g., `npm run dev:watcher` or equivalent).
 
 ## How to Improve Answer Quality
 
@@ -130,9 +131,11 @@ Markdown Magpie splits documents by headings. To improve retrieval:
 
 If the answer content itself is poor (not just low confidence), check the chat provider and watcher:
 
-- Ensure the provider environment variables are set correctly (e.g., `OPENAI_COMPATIBLE_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`).
-- Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`.
-- Test with a simple question that should be well-covered.
+- Ensure the provider environment variables are set correctly (e.g., `OPENAI_COMPATIBLE_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`). Required variables per capability:
+  - **openai-compatible:** `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL`
+  - **azure-openai:** `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`
+- Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
+- Test with a simple question that should be well-covered. If the job stays queued, consult the watcher logs for errors.
 - Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart the watcher. `mock` produces deterministic answers from retrieved context without requiring API keys.
 
 ### 7. Adjust System Parameters
@@ -175,7 +178,8 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | All answers are low-confidence | Knowledge index is empty | Index the flow and wait for embedding pass |
 | Low confidence on specific topics | Knowledge gap in the base | Write or generate a proposal for the missing topic |
 | Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
-| Answers are gibberish or off-topic | AI provider misconfigured, down, or watcher not running | Check provider env vars, verify watcher is running, test with `mock` |
+| No answer or job never completes | No watcher running or missing capability | Start watcher, check credentials, verify startup logs |
+| Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with `mock` |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
 
