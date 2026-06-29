@@ -289,7 +289,7 @@ Rather than a single whole-knowledge-base crunch, Magpie now runs several **patr
   - **Split** – breaks overgrown documents into focused pieces.
 - **Improve-patrol** – editorial growth; source-grounded expansions for fine-but-thin documents.
 
-Each patrol produces a `MaintenanceRun` record surfaced in the Schedules page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
+Each patrol produces a `MaintenanceRun` record surfaced in the Schedules and Activity pages. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
 
 Patrol schedules can be enabled/disabled per flow and cron expression via the **Schedules** page in the web console.
 
@@ -338,7 +338,7 @@ curl -s http://localhost:4000/api/knowledge/documents
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API. |
 | “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions. |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set. |
-| `/api/ask` returns 202 (queued) | Normal for queue-only mode; job never completes if watcher not running | Start a watcher process. |
+| `/api/ask` returns 202 (queued) and job never completes | No watcher running, or watcher does not advertise a capable provider | Start the watcher process and confirm its provider credentials match `AI_PROVIDER`. |
 
 ## Reference
 
