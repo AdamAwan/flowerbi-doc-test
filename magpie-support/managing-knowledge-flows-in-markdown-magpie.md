@@ -50,6 +50,8 @@ Supported source kinds:
 - `internet` – a plain HTTP/HTTPS URL that returns Markdown.
 - `agent` – the agent’s own knowledge (no URL needed).
 
+For backwards compatibility, the singular aliases `KNOWLEDGE_SOURCE` and `KNOWLEDGE_DESTINATION` are also accepted when only one source or destination is needed.
+
 ### Define Destinations
 
 Use `KNOWLEDGE_DESTINATIONS` as a JSON array. Each destination must have an `id`, `name`, and `url` (Git remote).
@@ -76,14 +78,27 @@ For backwards compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` 
 
 ### Add Embeddings (Optional but Recommended)
 
-To enable hybrid retrieval, configure an embedding provider:
+To enable hybrid retrieval, configure an embedding provider. Embeddings are configured independently of the chat provider – you can use one provider (e.g. DeepSeek) for answering and another (e.g. OpenAI) for embeddings.
 
 ```env
 KNOWLEDGE_STORE=postgres
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
+
+# OpenAI‑compatible embeddings (model must output 1536‑dimensional vectors)
 OPENAI_COMPATIBLE_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
-OPENAI_COMPATIBLE_API_KEY=sk-...
+OPENAI_COMPATIBLE_EMBEDDING_BASE_URL=https://api.openai.com/v1
+OPENAI_COMPATIBLE_EMBEDDING_API_KEY=sk-...
+```
+
+If `OPENAI_COMPATIBLE_EMBEDDING_BASE_URL` and `OPENAI_COMPATIBLE_EMBEDDING_API_KEY` are left blank, the system falls back to the common chat values (`OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`). Hybrid retrieval activates automatically when `KNOWLEDGE_STORE=postgres` **and** a complete set of embedding credentials are configured; otherwise the system stays on keyword-only search. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
+
+Alternatively, for Azure OpenAI embeddings:
+
+```env
+AZURE_OPENAI_ENDPOINT=https://example.openai.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=...
+AZURE_OPENAI_API_VERSION=2024-10-21
 ```
 
 ## The Watcher and AI Job Execution
@@ -146,7 +161,7 @@ Navigate to **Knowledge > Repositories** in the web console. Click the **Index**
 
 ### After Indexing
 
-The API automatically runs background embedding for any section whose vector is missing. Embedding runs inside the API process — no separate watcher is needed for this step. When embeddings are configured, retrieval becomes **hybrid** (a pgvector nearest-neighbour search fused with keyword scoring via Reciprocal Rank Fusion). Otherwise, keyword-only scoring is used. The active retrieval mode is reported by `GET /api/config`.
+The API automatically runs background embedding for any section whose vector is missing. Embedding runs inside the API process — no separate watcher is needed for this step. When embeddings are configured, retrieval becomes **hybrid** (a pgvector nearest-neighbour search fused with keyword scoring via Reciprocal Rank Fusion). Otherwise, keyword-only scoring is used. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
 
 ## Viewing Flow Status
 
@@ -328,6 +343,8 @@ curl -s http://localhost:4000/api/knowledge/documents
 | Symptom | Likely Cause | Remedy |
 |---|---|---|
 | `/api/ask` returns low confidence | Destination not indexed or embeddings missing | Re-index the flow and check embedding configuration. |
+| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process. |
+| `/api/ask` returns 202 (queued) and job never completes | No watcher running, or watcher does not advertise a capable provider | Start the watcher process and confirm its provider credentials match `AI_PROVIDER`. |
 | Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `refresh_pull_requests` scheduler is running. |
 | Patrol plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
 | Web console shows no flows | Environment variables not set | Verify `KNOWLEDGE_FLOWS` in `.env` and restart the API. |
@@ -338,7 +355,6 @@ curl -s http://localhost:4000/api/knowledge/documents
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API. |
 | “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions. |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set. |
-| `/api/ask` returns 202 (queued) and job never completes | No watcher running, or watcher does not advertise a capable provider | Start the watcher process and confirm its provider credentials match `AI_PROVIDER`. |
 
 ## Reference
 
