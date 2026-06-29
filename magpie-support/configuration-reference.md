@@ -129,6 +129,53 @@ Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
 
 Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
 
+### Web Console Authentication
+
+The web administration console (port 3000) validates Auth0-issued tokens via the `@auth0/auth0-react` SDK when authentication is enabled. It requires the following environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_AUTH0_ISSUER` | Auth0 issuer URL for the browser-side SDK. |
+| `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Auth0 client ID for the web application. |
+| `NEXT_PUBLIC_AUTH0_AUDIENCE` | Expected API audience (must match `AUTH0_AUDIENCE`). |
+
+When `AUTH_REQUIRED=false`, the web console skips authentication and operates without login. In production deployments, set these variables to match the Auth0 application registered for the web console.
+
+### Auth Variables Summary
+
+All authentication variables are shared between the API and MCP server via the `@magpie/auth` package:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AUTH_REQUIRED` | `false` | Enable authentication. |
+| `AUTH0_ISSUER_BASE_URL` | – | Full Auth0 issuer (e.g., `https://your-tenant.eu.auth0.com`). |
+| `AUTH0_DOMAIN` | – | Alternative to issuer base; issuer becomes `https://<domain>/`. |
+| `AUTH0_AUDIENCE` | `https://markdown-magpie.local/api` | API identifier the token must carry. |
+| `AUTH0_JWKS_URI` | Derived from issuer | JWKS endpoint for token validation. |
+| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API. Required when `AUTH_REQUIRED=true`. |
+| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls. Required when `AUTH_REQUIRED=true`. |
+
+### Configuration Examples
+
+#### Enable Simple Auth (API + MCP stdio)
+
+```env
+AUTH_REQUIRED=true
+AUTH0_ISSUER_BASE_URL=https://markdown-magpie.auth0.com
+AUTH0_AUDIENCE=https://markdown-magpie.local/api
+MCP_AUTH_TOKEN=eyJhbGci...
+```
+
+#### Enable Per‑Tool Scopes (MCP HTTP)
+
+Add the MCP HTTP server service token and ensure the client tokens contain the appropriate scopes. The HTTP server’s own token is used for API calls and does not need scopes.
+
+```env
+AUTH_REQUIRED=true
+MCP_API_AUTH_TOKEN=eyJhbGci...
+# Also set Auth0 issuer and audience as above.
+```
+
 ## MCP Server Configuration
 
 The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess) and `streamable-http` (persistent HTTP on port 4001). Configure via:
@@ -147,6 +194,12 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 | `kb.feedback` | `feedback:questions` |
 
 For a detailed explanation of the permission model and future scope additions, see [Permissions and Access Controls](permissions-and-access-controls-in-markdown-magpie.md).
+
+## Future Directions
+
+- **Role‑based API access** – The API will enforce role‑based checks (e.g., admin, editor, viewer) on endpoints such as proposal creation, gap management, and system configuration.
+- **Team and organization support** – Integration with Microsoft Entra ID or Auth0 organizations will allow scoping permissions to specific teams.
+- **Audit logging** – All authentication decisions and permission checks will be logged for compliance and troubleshooting.
 
 ## Deployment Configuration
 

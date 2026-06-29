@@ -1,3 +1,5 @@
+> **Note:** This document's content has been consolidated into the [Configuration Reference](configuration-reference.md). It is retained here for reference and to provide detailed explanations.
+
 ---
 title: Permissions and Access Controls in Markdown Magpie
 status: draft
