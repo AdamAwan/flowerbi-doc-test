@@ -20,12 +20,14 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 ## Prerequisites
 
 - Node.js 22+ and npm 10 (if npm 11 fails, use `npx --yes npm@10 ci`).
-- Docker and Docker Compose (for Postgres; Redis is **not required** for local development — the queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank.)
+- Docker and Docker Compose (for Postgres and Redis).
 - A Git repository with Markdown files you want to manage.
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
 - **Watcher (required for queue mode):** If you set `AI_EXECUTION_MODE=queue`, you must also run the watcher process (see [Start the Watcher](#7-start-the-watcher-required-for-queue-mode)). The default `direct` mode does not require a watcher.
+
+> **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank.
 
 If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
 
@@ -57,15 +59,17 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
 AI_EXECUTION_MODE=direct
 AI_PROVIDER=mock
-AUTH_REQUIRED=false
 ```
 
-> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations). `AUTH_REQUIRED=false` turns off authentication so the API and watcher can communicate without Auth0 credentials.
+> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
+
 > **Note:** `AI_EXECUTION_MODE=direct` means the API calls the AI model synchronously. For asynchronous queue-based execution, set `AI_EXECUTION_MODE=queue` and start the watcher (see [Start the Watcher](#7-start-the-watcher-required-for-queue-mode)). If you prefer the queue‑only architecture (useful for production or to test the watcher), set `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later).
 
-## 3. Start Dependencies (Postgres)
+For local development, you can also set `AUTH_REQUIRED=false` to disable authentication so the API and watcher can communicate without credentials.
 
-The Docker Compose file is designed so that a bare `docker compose up` starts only Postgres (Redis is not required):
+## 3. Start Dependencies (Postgres + Redis)
+
+The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers:
 
 ```bash
 docker compose up -d
@@ -312,7 +316,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 
 - Learn about [knowledge gap detection and proposals](managing-knowledge-flows-in-markdown-magpie.md#the-gap-pipeline-and-flows).
 - Set up [real AI providers](integrations-and-connecting-data-sources.md#ai-provider-integrations) instead of `mock`.
-- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality.
+- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality (from the Quick Start guide).
 - Configure automated [patrol maintenance](managing-knowledge-flows-in-markdown-magpie.md#patrol-maintenance-scheduled-knowledge-base-tidying) for knowledge base tidying.
 - Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
 - Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
