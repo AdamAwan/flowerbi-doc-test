@@ -108,7 +108,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## The Watcher and AI Job Execution
 
-All AI work in Magpie is modeled as jobs on a pg-boss queue in Postgres, not as a hard dependency on one model vendor. **The API never calls a model inline.** It enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access.
+All AI work in Magpie is modeled as jobs on a pg-boss queue in Postgres, not as a hard dependency on one model vendor. **The API never calls a model inline.** There is no longer a synchronous 'direct' mode — the API does not support inline model calls. Instead, it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access.
 
 ### Job States
 
@@ -376,7 +376,6 @@ curl -s http://localhost:4000/api/config | jq .retrieval
 | Symptom | Likely Cause | Remedy |
 |---|---|---|
 | `/api/ask` returns low confidence | Destination not indexed or embeddings missing | Re-index the flow and check embedding configuration. |
-| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process. |
 | `/api/ask` returns 202 (queued) and job never completes | No watcher running, or watcher does not advertise a capable provider | Start the watcher process and confirm its provider credentials match `AI_PROVIDER`. |
 | Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `refresh_pull_requests` scheduler is running. |
 | Patrol plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
