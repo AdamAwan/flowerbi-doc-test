@@ -24,7 +24,7 @@ See the full [Getting Started](getting-started-onboarding-and-indexing-content-i
 
 ## Queue Mode Specifics
 
-Markdown Magpie uses a queue-only architecture by default. The API enqueues AI jobs that a separate **watcher** process claims and completes. This section covers setup steps specific to the queue-only architecture.
+For queue mode, Markdown Magpie enqueues AI jobs that a separate **watcher** process claims and completes. This section covers setup steps specific to queue mode.
 
 ### Start the Watcher (Required for Queue Mode)
 
