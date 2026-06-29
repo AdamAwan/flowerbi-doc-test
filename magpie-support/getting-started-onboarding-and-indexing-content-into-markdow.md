@@ -6,9 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates the earlier [Quick Start](quick-start.md) document, which is now deprecated. For the most current instructions, please refer to this document.
-
-> **Important:** Markdown Magpie uses a queue-only architecture by default. The API enqueues AI jobs that a separate **watcher** process claims and completes. This guide includes starting the watcher in a dedicated step. Without it, questions will stay queued and never be answered. If you prefer synchronous (direct) execution, set `AI_EXECUTION_MODE=direct` and skip Step 7.
+> **Note:** Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (async with a watcher). The default is `direct`, but many production setups use `queue`. This guide covers both modes; adjust your configuration accordingly. If you are using `queue` mode, you must start the watcher (Step 7). For `direct` mode, skip Step 7.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -66,11 +64,11 @@ AUTH_REQUIRED=false
 
 > **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
 > 
-> **Note:** `AI_EXECUTION_MODE=queue` is the default for production. For synchronous answers (no watcher), set `AI_EXECUTION_MODE=direct`. If you prefer the queue‑only architecture (useful for production or to test the watcher), keep `AI_EXECUTION_MODE=queue` and `AUTH_REQUIRED=false` (see the watcher step later). The rest of this guide assumes `queue` mode.
+> **Note:** The example above sets `AI_EXECUTION_MODE=queue` (default for production). For synchronous answers (no watcher), set `AI_EXECUTION_MODE=direct` and skip Step 7. If you prefer the queue‑only architecture, keep `queue` and `AUTH_REQUIRED=false` (see the watcher step later).
 
 ## 3. Start Dependencies (Postgres + Redis optional)
 
-The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers:
+The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and optionally Redis). Redis is not required for core functionality—the queue uses Postgres via pg-boss. If you prefer not to run Redis, you can comment out the Redis service in `docker-compose.yml` or simply ignore it.
 
 ```bash
 docker compose up -d
@@ -80,6 +78,8 @@ Wait for Postgres to be healthy:
 ```bash
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy ]; do sleep 2; done
 ```
+
+> **Note:** If you are using queue mode and have set `QUEUE_URL` to a Redis connection, ensure Redis is also started. By default, the queue uses Postgres via pg‑boss, so Redis is optional.
 
 ## 4. Run Migrations
 
@@ -267,6 +267,15 @@ MAGPIE_DEV_API_PROXY="http://localhost:4000" npm run dev:web
 ```
 
 Open `http://localhost:3000` to browse the knowledge base, view questions, and manage proposals.
+
+## Execution Modes: Direct vs Queue
+
+| Mode | `AI_EXECUTION_MODE` | API Behaviour | Watcher Required |
+|------|---------------------|---------------|------------------|
+| Direct | `direct` | Synchronous; API calls AI provider inline and returns answer in the response. | No |
+| Queue | `queue` | Asynchronous; API enqueues a job and returns `202`. A watcher must claim and complete the job. | Yes |
+
+The default is `direct`. Use `queue` for production deployments where you want to decouple request handling from AI processing.
 
 ## Embedding Configuration (Optional)
 
