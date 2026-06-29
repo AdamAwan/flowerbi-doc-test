@@ -40,15 +40,14 @@ Use `KNOWLEDGE_SOURCES` as a JSON array. Each source has at minimum an `id` and 
 ```env
 KNOWLEDGE_SOURCES=[
   {"id":"flowerbi-src","name":"FlowerBI Source","kind":"git","url":"https://github.com/example/flowerbi.git","subpath":"src"},
-  {"id":"external-guide","name":"External Guide","kind":"internet","url":"https://example.com/guide.md"}
+  {"id":"external-guide","name":"External Guide","kind":"internet","url":"https://example.com/guide.md"},
+  {"id":"local-docs","name":"Local Product Docs","kind":"local","path":"knowledge-bases/product"},
+  {"id":"agent-knowledge","name":"Agent Knowledge","kind":"agent"}
 ]
 ```
 
 Supported source kinds:
-- `local` – a folder on the server (e.g., `knowledge-bases/product`). Use `path` to point to the folder:
-  ```json
-  {"id":"product-docs","name":"Product Docs","kind":"local","path":"knowledge-bases/product"}
-  ```
+- `local` – a folder on the server (e.g., `knowledge-bases/product`). Use `path` to point to the folder.
 - `git` – a remote Git repository, optionally with a `subpath` to a subfolder.
 - `internet` – a plain HTTP/HTTPS URL that returns Markdown.
 - `agent` – the agent’s own knowledge (no URL needed).
