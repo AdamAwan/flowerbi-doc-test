@@ -72,7 +72,7 @@ curl -X POST http://localhost:4000/api/knowledge/repositories/index \
   -d '{"flowId":"flowerbi"}'
 ```
 
-Wait for the background embedding pass to finish. You can monitor progress by checking the API logs for "Embedded N section(s); 0 remaining".
+The API spawns a background task to embed any sections whose embedding is `NULL`. This embedding pass runs inside the API process — there is no separate watcher or scheduled job for it. You can monitor progress by checking the API logs for "Embedded N section(s); 0 remaining".
 
 ### 2. Configure Hybrid Retrieval with Embeddings
 
@@ -80,10 +80,12 @@ Hybrid retrieval (keyword + vector) significantly improves relevance. To enable 
 
 - Set `KNOWLEDGE_STORE=postgres` and provide a valid `DATABASE_URL`.
 - Set either:
-  - **OpenAI-compatible embedding provider:** Set `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (e.g., `text-embedding-3-small`), `OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_API_KEY`.
+  - **OpenAI-compatible embedding provider:** Set `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (e.g., `text-embedding-3-small`), `OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_API_KEY`. The embedding endpoint resolves its base URL and API key from `OPENAI_COMPATIBLE_EMBEDDING_BASE_URL` / `OPENAI_COMPATIBLE_EMBEDDING_API_KEY`, each falling back to the shared chat values when left blank.
   - **Azure OpenAI embedding provider:** Set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
 
-After configuration, re-index the flow (step 1) to generate embeddings. The system will automatically switch to hybrid mode.
+Embeddings are configured **independently of chat** — you can answer questions with one provider and embed with another (e.g., DeepSeek for `/api/ask`, OpenAI for embeddings). The system automatically activates hybrid retrieval when both `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are present. `GET /api/config` reports the resolved `retrieval.mode` and a plain‑language `reason`.
+
+After configuration, re-index the flow (step 1) to generate embeddings.
 
 ### 3. Expand and Improve the Knowledge Base Content
 
@@ -93,7 +95,7 @@ Low confidence often means the knowledge base lacks relevant documents. Use the 
 curl http://localhost:4000/api/gaps/clusters
 ```
 
-Each cluster represents a set of related questions that a single document could resolve. The gap reconciler (a scheduled maintenance task) clusters open gaps, drafts proposals, and publishes them as pull requests — all without manual review if automated. You can also manually draft or generate a proposal:
+Each cluster represents a set of related questions that a single document could resolve. The `gaps-to-pull-requests` reconciler (a scheduled maintenance job) automatically clusters gaps, drafts proposals for uncovered clusters, publishes them as pull requests, and advances proposals as their PRs merge or close. You can also manually draft or generate a proposal:
 
 ```bash
 curl -X POST http://localhost:4000/api/proposals/from-gap \
@@ -101,7 +103,13 @@ curl -X POST http://localhost:4000/api/proposals/from-gap \
   -d '{"summary":"No hotfix rollback procedure is documented","destinationId":"flowerbi-docs"}'
 ```
 
-Review the generated Markdown and publish it to a branch, then merge it. After re-indexing, the same question will return high-confidence answers.
+Proposals move through a status lifecycle: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready` and its target path maps to an indexed Git checkout, you can publish it:
+
+```bash
+POST /api/proposals/:id/publish
+```
+
+Publication enqueues a job that the watcher completes by committing the Markdown to a new branch, pushing it, and opening a pull request. Review the generated Markdown and merge it. After re-indexing, the same question will return high-confidence answers.
 
 ### 4. Optimize Document Structure
 
@@ -167,7 +175,7 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | All answers are low-confidence | Knowledge index is empty | Index the flow and wait for embedding pass |
 | Low confidence on specific topics | Knowledge gap in the base | Write or generate a proposal for the missing topic |
 | Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
-| Answers are gibberish or off-topic | AI provider misconfigured or watcher down | Check provider env vars, verify watcher is running |
+| Answers are gibberish or off-topic | AI provider misconfigured, down, or watcher not running | Check provider env vars, verify watcher is running, test with `mock` |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
 
