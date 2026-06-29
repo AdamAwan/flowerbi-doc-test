@@ -25,6 +25,8 @@ When both `KNOWLEDGE_STORE=postgres` and an embeddings provider are configured, 
 
 Query-time embedding (embedding the user's question) is synchronous in the API request. Section embeddings are generated asynchronously after an index operation.
 
+**Note:** CLI agents such as Codex and Claude cannot produce embeddings. Embeddings must come from an admin-configured OpenAI-compatible or Azure endpoint.
+
 ## Why Low-Confidence Answers Happen
 
 Confidence is derived from the relevance scores of the indexed sections retrieved for your question. A low score indicates one of the following:
@@ -33,7 +35,7 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **The question falls outside the scope of the indexed documents.** The knowledge base may not cover the topic, or the relevant information exists but is not effectively retrievable due to poor document structure or lack of coverage.
 - **The retrieval mode is not optimal.** Keyword-only retrieval limits the ability to match semantically similar content. Hybrid mode (keyword + vector) is recommended for best results.
 - **The embeddings are not generated.** Even with hybrid retrieval enabled, if embeddings have not been computed for indexed sections (e.g., they are still `NULL` in the database), the hybrid fallback may be keyword-only, lowering retrieval quality.
-- **No watcher is running with the required capability.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. If no watcher is running or the watcher does not advertise the required capability (e.g., `openai-compatible`, `azure-openai`), the job stays queued and never completes, resulting in no answer or an answer with unknown confidence. Check the watcher's startup logs for "Capability provider — ready" or similar.
+- **No watcher is running with the required capability.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. Jobs move through states: `created` → `active` → `completed` (or `failed`). A watcher claims active jobs; if none is running, jobs remain `created` indefinitely, resulting in no answer or an answer with unknown confidence. Check the watcher's startup logs for "Capability provider — ready" or similar.
 - **The AI provider is not configured correctly.** The watcher advertises capabilities only when all required environment variables are set for that provider. Missing API keys, base URLs, or model names prevent the watcher from claiming jobs, leading to stalled answers and low confidence.
 - **The question is ambiguous or malformed.** The retrieval pipeline works best with clear, specific questions.
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
@@ -87,7 +89,7 @@ Hybrid retrieval (keyword + vector) significantly improves relevance. To enable 
   - **OpenAI-compatible embedding provider:** Set `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (e.g., `text-embedding-3-small`), `OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_API_KEY`. The embedding endpoint resolves its base URL and API key from `OPENAI_COMPATIBLE_EMBEDDING_BASE_URL` / `OPENAI_COMPATIBLE_EMBEDDING_API_KEY`, each falling back to the shared chat values when left blank.
   - **Azure OpenAI embedding provider:** Set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
 
-Embeddings are configured **independently of chat** — you can answer questions with one provider and embed with another (e.g., DeepSeek for `/api/ask`, OpenAI for embeddings). The system automatically activates hybrid retrieval when both `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are present. `GET /api/config` reports the resolved `retrieval.mode` and a plain‑language `reason`.
+Embeddings are configured **independently of chat** — you can answer questions with one provider and embed with another (e.g., DeepSeek for `/api/ask`, OpenAI for embeddings). The system automatically activates hybrid retrieval when both `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are present. `GET /api/config` reports the resolved `retrieval.mode` and a plain‑language `reason`. Note that CLI agents (Codex, Claude) cannot produce embeddings; only administrator-configured embedding endpoints can.
 
 After configuration, re-index the flow (step 1) to generate embeddings.
 
@@ -107,7 +109,7 @@ curl -X POST http://localhost:4000/api/proposals/from-gap \
   -d '{"summary":"No hotfix rollback procedure is documented","destinationId":"flowerbi-docs"}'
 ```
 
-Proposals move through a status lifecycle: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`, `superseded`. Once a proposal is `ready` and its target path maps to an indexed Git checkout, you can publish it:
+Proposals move through a status lifecycle: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready` and its target path maps to an indexed Git checkout, you can publish it:
 
 ```bash
 POST /api/proposals/:id/publish
