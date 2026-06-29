@@ -264,7 +264,7 @@ Batch deletions work the same way — remove several files, commit, push, and re
 
 #### Removing Documents via Patrol Maintenance
 
-If a document has become obsolete or inconsistent, the scheduled **fix-patrol** can detect duplicates, contradictions, and overgrown documents. When it finds a problem, it creates a proposal with a multi-file changeset (dedupe, split, or correct) that can be reviewed and published as a pull request.
+If a document has become obsolete or inconsistent, the scheduled **correctness patrol** can detect duplicates, contradictions, and overgrown documents. When it finds a problem, it creates a proposal with a multi-file changeset (dedupe, split, or correct) that can be reviewed and published as a pull request.
 
 ## Keeping Flows Updated
 
@@ -302,7 +302,6 @@ Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-conf
 5. Checks open pull requests: when a PR merges, the associated gaps are resolved and the knowledge base is re-indexed; if a PR closes without merging, the proposal is marked `rejected`.
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
-
 The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
 
 ### Proposal Lifecycle
@@ -322,14 +321,14 @@ Publication is enqueue-only. The watcher commits the Markdown to a `magpie/propo
 
 Rather than a single whole-knowledge-base crunch, Magpie now runs several **patrol** lenses on a rolling cursor. Each scheduled tick selects the least-recently-checked documents in a flow and runs one or more lenses over them:
 
-- **Fix-patrol** – correctness and structural maintenance:
+- **Correctness patrol** – verify, dedupe, split. The verify, dedupe, and split lenses propose corrections, consolidations, and splits.
   - **Verify** – checks document claims against source material; flags unprovable statements.
   - **Correct** – automatically rewrites flagged documents.
   - **Dedupe** – finds near-duplicates and reconciles pairs.
   - **Split** – breaks overgrown documents into focused pieces.
-- **Improve-patrol** – editorial growth; source-grounded expansions for fine-but-thin documents.
+- **Editorial patrol** – expand thin docs. Rolls its own cursor across this flow's knowledge-base documents, sending the least-recently-improved ones to the model with the flow's source material so fine-but-thin documents grow source-backed coverage. Separate from the Correctness patrol: it proposes editorial expansion, not correctness or structural fixes.
 
-Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The fix-patrol and improve-patrol are separate jobs: fix-patrol is conservative (only acts when something is demonstrably wrong), while improve-patrol is proactive (grows fine-but-thin docs).
+Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The correctness patrol is conservative (only acts when something is demonstrably wrong), while the editorial patrol is proactive (grows fine-but-thin docs).
 
 Patrol schedules can be enabled/disabled per flow and cron expression via the **Schedules** page in the web console.
 
@@ -376,7 +375,7 @@ curl -s http://localhost:4000/api/config | jq .retrieval
 |---|---|---|
 | `/api/ask` returns low confidence | Destination not indexed or embeddings missing | Re-index the flow and check embedding configuration. |
 | `/api/ask` returns 202 (queued) and job never completes | No watcher running, or watcher does not advertise a capable provider | Start the watcher process and confirm its provider credentials match `AI_PROVIDER`. |
-| Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `refresh_pull_requests` scheduler is running. |
+| Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `refresh_flow_snapshot` scheduler is running. |
 | Patrol plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
 | Web console shows no flows | Environment variables not set | Verify `KNOWLEDGE_FLOWS` in `.env` and restart the API. |
 | Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
