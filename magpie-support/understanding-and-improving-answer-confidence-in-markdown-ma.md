@@ -107,7 +107,7 @@ curl -X POST http://localhost:4000/api/proposals/from-gap \
   -d '{"summary":"No hotfix rollback procedure is documented","destinationId":"flowerbi-docs"}'
 ```
 
-Proposals move through a status lifecycle: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready` and its target path maps to an indexed Git checkout, you can publish it:
+Proposals move through a status lifecycle: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`, `superseded`. Once a proposal is `ready` and its target path maps to an indexed Git checkout, you can publish it:
 
 ```bash
 POST /api/proposals/:id/publish
