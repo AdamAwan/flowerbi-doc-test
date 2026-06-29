@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (async with a watcher). The default is `direct`, but many production setups use `queue`. This guide covers both modes; adjust your configuration accordingly. If you are using `queue` mode, you must start the watcher (Step 7). For `direct` mode, skip Step 7.
+> **Note:** Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (async with a watcher). This guide consolidates the original Quick Start guide. For the most current instructions, refer to this document. If you are using `queue` mode, you must start the watcher (Step 7). For `direct` mode, skip Step 7.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -306,6 +306,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - **Retrieval mode** is `keyword` by default. To enable hybrid (keyword + vector) search, configure Postgres with pgvector and an embedding provider.
 - **No bundled knowledge base is provided.** The `knowledge-bases/` directory is intentionally empty; configure your own sources and destinations.
 - **Redis is not required** – the queue uses Postgres via pg-boss, so you can safely omit or disable the Redis container.
+- **Queue vs Direct:** In queue mode, the watcher is mandatory. In direct mode, answers are synchronous.
 
 ## Troubleshooting
 
