@@ -15,20 +15,22 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - Index your Markdown content.
 - Verify that indexing succeeded.
 
-> **Note:** This guide replaces the older [Quick Start](quick-start.md), which has been removed. All content has been reviewed and reconciled. Refer to this document for the most current instructions.
+> **Note:** This guide replaces the older [Quick Start](quick-start.md), which has been reduced to a deprecation notice. All content has been reviewed and reconciled. Refer to this document for the most current instructions.
 
-> **Important:** Markdown Magpie uses a queue-only architecture by default when `AI_EXECUTION_MODE=queue` (or unset). The API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. This guide covers both direct (synchronous) and queue modes. Without the watcher in queue mode, questions will stay queued and never be answered.
+Markdown Magpie supports two execution modes to suit different development styles:
+- **Direct mode** (default): The API calls the AI model synchronously when a question is asked. Set `AI_EXECUTION_MODE=direct` (or omit it) to use this mode. No separate watcher is needed.
+- **Queue mode**: The API enqueues jobs that a separate **watcher** process claims and completes. This is useful for decoupling request handling from AI processing. To use queue mode, set `AI_EXECUTION_MODE=queue` and start the watcher as described in the [Queue Mode](#queue-mode-watcher-based-setup) section. The watcher is required for all generative work when using queue mode.
 
 ## Prerequisites
 
 - Node.js 22+ and npm 10 (if npm 11 fails, use `npx --yes npm@10 ci`).
-- Docker and Docker Compose (for Postgres and optionally Redis).
+- Docker and Docker Compose (for Postgres; Redis is optional and included in the default Docker Compose for compatibility but is not required).
 - A Git repository with Markdown files you want to manage.
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
 
-> **Redis:** Redis is **not required** for local development. The job queue uses Postgres via pg-boss. The default Docker Compose file includes both Postgres and Redis for compatibility. If you prefer to use Redis, you can set `QUEUE_URL`. By default, no Redis is needed.
+> **Note on Redis:** Redis is only required when running in `direct` execution mode (`AI_EXECUTION_MODE=direct`). For queue-only mode (where the watcher processes jobs), Redis is **not** needed — the queue uses Postgres via pg-boss. Set `QUEUE_URL` only if you have a legacy configuration; it can otherwise be left blank.
 
 If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
 
@@ -68,9 +70,14 @@ AUTH_REQUIRED=false
 > - `AUTH_REQUIRED=false` turns off authentication so the API and watcher can communicate without Auth0 credentials. For local development, this is recommended.
 > - The default mode is `direct` (synchronous). If you prefer the queue architecture (where the API enqueues jobs and a separate watcher processes them), set `AI_EXECUTION_MODE=queue` and also start the watcher (see [Queue Mode](#queue-mode-watcher-based-setup) section).
 
-## 3. Start Dependencies (Postgres + Redis)
+### Execution Modes (Detailed)
 
-The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers:
+- **Direct mode**: The API calls the AI model synchronously. No separate watcher is required for answering questions. The watcher is still needed for other background tasks such as drafting proposals and patrol maintenance.
+- **Queue mode**: The API enqueues AI jobs. A watcher process must be running to claim and complete those jobs. This mode is required for all generative work when enabled.
+
+## 3. Start Dependencies (Postgres)
+
+The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres) without the application containers:
 
 ```bash
 docker compose up -d
@@ -81,7 +88,7 @@ Wait for Postgres to be healthy:
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy ]; do sleep 2; done
 ```
 
-> If you do not need Redis, you can modify the `docker-compose.yml` to remove the Redis service, or simply leave it running — it is not used by default when `QUEUE_URL` is not set.
+> If you prefer to use Redis, modify the `docker-compose.yml` to include the Redis service, or leave it as is — Redis is not used by default when `QUEUE_URL` is not set.
 
 ## 4. Run Migrations
 
@@ -193,7 +200,7 @@ The POST request returns a summary:
 
 > **Note:** The API indexes the **destination** of a flow, not the raw source. The `flowId` must match an entry in `KNOWLEDGE_FLOWS`. After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
 
-## 8. Verify Indexing
+### Verify Indexing
 
 Check that your documents are indexed:
 
@@ -215,7 +222,7 @@ Search for a term:
 curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
 ```
 
-## 9. Ask a Question (Default: Direct Mode)
+## 8. Ask a Question (Default: Direct Mode)
 
 In `direct` mode (the default for this guide), the API answers synchronously:
 
@@ -229,7 +236,7 @@ You should receive an answer with citations and a confidence rating.
 
 > **If you enabled queue mode:** See the [Queue Mode](#queue-mode-watcher-based-setup) section for enqueue-only usage.
 
-## 10. Queue Mode (Watcher-Based Setup)
+## 9. Queue Mode (Watcher-Based Setup)
 
 If you set `AI_EXECUTION_MODE=queue` in your `.env`, the API uses a queue-only architecture. The API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. This section explains how to run the watcher and use the enqueue-only API.
 
@@ -265,7 +272,7 @@ curl -s "http://localhost:4000/api/questions/<question-id>"
 
 The question ID is returned as `questionId` in the 202 response.
 
-## 11. (Optional) Start the Web Console
+## 10. (Optional) Start the Web Console
 
 In a separate terminal, start the Next.js web app:
 
