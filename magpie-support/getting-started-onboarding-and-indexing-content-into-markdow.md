@@ -6,6 +6,8 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
+> **Note:** This guide consolidates the former [Quick Start](quick-start.md) document. Both direct (synchronous) and queue‑based (asynchronous) execution modes are covered below.
+
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
 This guide explains how to get your Markdown content into Markdown Magpie so it can answer questions with citations, detect knowledge gaps, and propose improvements. You will:
@@ -18,7 +20,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 ## Prerequisites
 
 - Node.js 22+ and npm 10 (if npm 11 fails, use `npx --yes npm@10 ci`).
-- Docker and Docker Compose (for Postgres and Redis).
+- Docker and Docker Compose (for Postgres). Redis is **not required** for local development; the job queue uses Postgres via pg-boss. The Docker Compose file starts Redis for legacy compatibility, but it is optional.
 - A Git repository with Markdown files you want to manage.
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
@@ -54,13 +56,23 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
 AI_EXECUTION_MODE=direct
 AI_PROVIDER=mock
+AUTH_REQUIRED=false
 ```
 
-> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
+> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. `AUTH_REQUIRED=false` turns off authentication locally. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
 
-## 3. Start Dependencies (Postgres + Redis)
+### Execution Mode: Direct vs. Queue
 
-The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers:
+You can choose one of two execution modes:
+
+- **Direct** (`AI_EXECUTION_MODE=direct`): The API calls the AI model synchronously; no watcher needed. Set `AUTH_REQUIRED=false` for local development.
+- **Queue** (default if `AI_EXECUTION_MODE` is unset): The API enqueues jobs and a separate **watcher** process must be running to claim and complete them. This guide covers both paths in later steps.
+
+For the queue mode, also ensure `AUTH_REQUIRED=false` and that the watcher credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`) are empty or set appropriately.
+
+## 3. Start Dependencies (Postgres + Redis optional)
+
+The Docker Compose file starts both Postgres and Redis. Redis is optional but required for legacy queue configurations.
 
 ```bash
 docker compose up -d
@@ -70,6 +82,8 @@ Wait for Postgres to be healthy:
 ```bash
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy ]; do sleep 2; done
 ```
+
+> **Note:** Redis is **not required** for local development in queue mode. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank.
 
 ## 4. Run Migrations
 
@@ -149,7 +163,20 @@ The API will be available at `http://localhost:4000`. Verify with:
 curl localhost:4000/api/health
 ```
 
-## 7. Index Your Content
+## 7. Start the Watcher (Required for Queue Mode)
+
+If you are using queue mode (default), start the watcher in a separate terminal so it can claim and complete AI jobs:
+
+```bash
+AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
+  MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
+```
+
+> The watcher is **required** for all generative work in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be completed. The mock provider works out of the box — no additional credentials needed.
+
+If you are using direct mode (`AI_EXECUTION_MODE=direct`), you can skip this step.
+
+## 8. Index Your Content
 
 With the API running, trigger indexing of a configured flow:
 
@@ -179,7 +206,9 @@ The POST request returns a summary:
 
 > **Note:** The API indexes the **destination** of a flow, not the raw source. The `flowId` must match an entry in `KNOWLEDGE_FLOWS`.
 
-## 8. Verify Indexing
+After indexing, background embedding runs automatically. For best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
+
+## 9. Verify Indexing and Ask a Question
 
 Check that your documents are indexed:
 
@@ -201,7 +230,9 @@ Search for a term:
 curl -s 'http://localhost:4000/api/knowledge/search?q=setup'
 ```
 
-Ask a test question:
+### Direct Mode
+
+In **direct mode**, the `/ask` endpoint returns the answer immediately:
 
 ```bash
 curl -s http://localhost:4000/api/ask \
@@ -211,7 +242,19 @@ curl -s http://localhost:4000/api/ask \
 
 You should receive an answer with citations and a confidence rating.
 
-## 9. (Optional) Start the Web Console
+### Queue Mode
+
+In **queue mode**, the `/ask` endpoint is **enqueue-only**: it records the question, returns `202` with a job ID, and enqueues an `answer_question` job. To wait for the answer, use the `wait` link:
+
+```bash
+JOB_ID="..."  # from the response's job.id
+curl -s "http://localhost:4000/api/jobs/$JOB_ID/wait"
+curl -s "http://localhost:4000/api/questions/<question-id>"
+```
+
+The question ID is returned as `questionId` in the 202 response.
+
+## 10. (Optional) Start the Web Console
 
 In a separate terminal, start the Next.js web app:
 
@@ -257,9 +300,17 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | `curl localhost:4000/api/health` fails | API not started or port conflict | Check the terminal running the API; kill other processes on port 4000 |
 | Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
+| `/ask` returns 202 but never completes | The watcher is not running (queue mode) | Start the watcher (step 7) and retry the question |
+| Watcher logs `Capability … not ready` | Missing provider env vars | Check environment variables for the chosen provider. For mock, no extra vars needed |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
+| `401` on API calls locally | `AUTH_REQUIRED` is true | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
+| Bootstrap fails with permission error | `MAGPIE_CHECKOUT_ROOT` not writable | Override to a writable local path |
+| Hybrid retrieval not active | Embedding credentials incomplete | Check that embedding provider env vars are set and `KNOWLEDGE_STORE=postgres` |
+| Answers are gibberish or off-topic | AI provider misconfigured or down | Check provider env vars, test with `mock` |
+| Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
+| `/ask` returns low confidence on specific topics | Knowledge gap in the base | Write or generate a proposal for the missing topic |
 
 ## Next Steps
 
@@ -269,6 +320,8 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - Configure automated [patrol maintenance](managing-knowledge-flows-in-markdown-magpie.md#patrol-maintenance-scheduled-knowledge-base-tidying) for knowledge base tidying.
 - Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
 - Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
+- Understand the [architecture and job model](architecture.md).
+- Try the [full Docker Compose stack](README.md#docker-compose) for a self-contained demo.
 
 ---
 
