@@ -107,23 +107,7 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 ## Authentication (Auth0 / Entra ID)
 
-Set `AUTH_REQUIRED=true` to enable authentication. Then configure one of the following:
-
-**Auth0:**
-```env
-AUTH0_ISSUER_BASE_URL=https://your-tenant.eu.auth0.com
-AUTH0_AUDIENCE=https://markdown-magpie.local/api
-```
-Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
-
-**Microsoft Entra ID:**
-- Use the standard Azure environment variables (see `infra/azure/README.md`).
-
-**MCP‑specific tokens:**
-- `MCP_AUTH_TOKEN`: Token used by the MCP stdio server to authenticate to the API.
-- `MCP_API_AUTH_TOKEN`: Token used by the MCP HTTP server for downstream API calls.
-
-Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
+Authentication is configured via environment variables. For a detailed guide covering all aspects of authentication, including Auth0 and Microsoft Entra ID setup, per‑tool MCP scopes, web console auth, and future directions, see [Permissions and Access Controls in Markdown Magpie](permissions-and-access-controls-in-markdown-magpie.md).
 
 ## MCP Server Configuration
 
@@ -134,13 +118,7 @@ MCP_TRANSPORT=stdio  # or streamable-http
 MCP_PORT=4001        # for HTTP transport
 ```
 
-When HTTP transport is used, per‑tool OAuth scopes are enforced:
-
-| Tool | Scope |
-|---|---|
-| `kb.search` | `read:knowledge` |
-| `kb.ask` | `ask:knowledge` |
-| `kb.feedback` | `feedback:questions` |
+When HTTP transport is used, per‑tool OAuth scopes are enforced. See the Permissions document above for the scope mapping.
 
 ## Deployment Configuration
 
