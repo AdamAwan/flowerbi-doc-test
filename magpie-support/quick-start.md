@@ -6,7 +6,7 @@ tags: [getting-started, quickstart, deprecated, old, superseded]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide has been consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) document. For the most current instructions, refer to that guide. This page serves as a legacy cross-reference for users who need the queue mode specifics or a quick reminder of steps.
+> **Note:** This guide has been consolidated into the [Getting Started: Onboarding and Indexing Content into Markdown Magpie](getting-started-onboarding-and-indexing-content-into-markdow.md) document. Please refer to the Getting Started guide for the most current and comprehensive instructions. The content below is retained only for reference and links.
 
 For quick reference, the main steps are:
 1. Clone and install
