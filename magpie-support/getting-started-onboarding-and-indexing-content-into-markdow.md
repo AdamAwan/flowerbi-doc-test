@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates content from the [Quick Start](quick-start.md) document, which has been superseded and is retained as a legacy reference. For all instructions, refer to this guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
+> **Note:** This guide consolidates content from the [Quick Start](quick-start.md) document, which has been deprecated and is retained as a legacy reference. For the most current and comprehensive instructions, refer to this guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
 
 > **Architecture note:** Markdown Magpie supports two execution modes. In `direct` mode (default), the API calls the AI model synchronously and answers are returned immediately. In `queue` mode, the API enqueues jobs that a separate **watcher** process claims and completes. If you use queue mode, you must also start the watcher (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The examples in this guide use direct mode unless otherwise noted.
 
