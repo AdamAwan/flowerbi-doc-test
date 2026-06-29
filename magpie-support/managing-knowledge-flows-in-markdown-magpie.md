@@ -97,6 +97,8 @@ OPENAI_COMPATIBLE_EMBEDDING_API_KEY=sk-...
 
 If `OPENAI_COMPATIBLE_EMBEDDING_BASE_URL` and `OPENAI_COMPATIBLE_EMBEDDING_API_KEY` are left blank, the system falls back to the common chat values (`OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`). Hybrid retrieval activates automatically when `KNOWLEDGE_STORE=postgres` **and** a complete set of embedding credentials are configured; otherwise the system stays on keyword-only search. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
 
+Note: `EMBEDDING_PROVIDER` is informational only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting `OPENAI_COMPATIBLE_EMBEDDING_MODEL` is what enables OpenAI-compatible embeddings.
+
 Alternatively, for Azure OpenAI embeddings:
 
 ```env
@@ -302,6 +304,8 @@ Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-conf
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
 
+The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
+
 ### Proposal Lifecycle
 
 A proposal moves through these statuses: `draft`, `ready`, `branch-pushed`, `pr-opened`, `merged`, `rejected`. Once a proposal is `ready`, it can be published:
@@ -314,10 +318,6 @@ POST /api/proposals/:id/publish
 ```
 
 Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch, pushes it, and opens a pull request. The proposal records the branch, commit SHA, and PR URL. If no host token is available, it degrades gracefully to a pushed branch.
-
-### Gap Clusters
-
-The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
 
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
