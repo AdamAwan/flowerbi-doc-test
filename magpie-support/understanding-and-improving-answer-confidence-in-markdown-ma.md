@@ -17,15 +17,23 @@ Magpie assigns a confidence score to each generated answer. This score reflects 
 
 Low confidence does not necessarily mean the answer is wrong – it indicates that the system has less assurance due to missing or conflicting evidence.
 
+### How Retrieval Mode Affects Confidence
+
+Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching) and `hybrid` (keyword + pgvector embeddings). Hybrid mode generally yields higher relevance and confidence because it captures semantic meaning beyond exact keyword matches.
+
+When both `KNOWLEDGE_STORE=postgres` and an embeddings provider are configured, retrieval is **hybrid**: a pgvector nearest-neighbour search is fused with an in-memory keyword scorer (heading match +3, content match +1) using Reciprocal Rank Fusion (RRF). Results carry a `[0,1]` relevance score. When either condition is absent, the system falls back to keyword-only scoring. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
+
+Query-time embedding (embedding the user's question) is synchronous in the API request. Section embeddings are generated asynchronously after an index operation.
+
 ## Why Low-Confidence Answers Happen
 
 Confidence is derived from the relevance scores of the indexed sections retrieved for your question. A low score indicates one of the following:
 
 - **The knowledge index is empty or incomplete.** If no documents have been indexed, there is no material to retrieve, and every answer will be low-confidence. This is the most common cause in fresh deployments or after a reset.
 - **The question falls outside the scope of the indexed documents.** The knowledge base may not cover the topic, or the relevant information exists but is not effectively retrievable due to poor document structure or lack of coverage.
-- **The retrieval mode is not optimal.** Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching) and `hybrid` (keyword + pgvector embeddings). Hybrid mode generally yields higher relevance and confidence because it captures semantic meaning beyond exact keyword matches.
+- **The retrieval mode is not optimal.** Keyword-only retrieval limits the ability to match semantically similar content. Hybrid mode (keyword + vector) is recommended for best results.
 - **The embeddings are not generated.** Even with hybrid retrieval enabled, if embeddings have not been computed for indexed sections (e.g., they are still `NULL` in the database), the hybrid fallback may be keyword-only, lowering retrieval quality.
-- **The AI provider is not configured correctly.** In `direct` mode, the answer is synthesized by a chat provider (e.g., OpenAI-compatible or Azure OpenAI). If the provider is misconfured, the answer may be generic or nonsensical, leading to low confidence scores.
+- **The AI provider or watcher is not running.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. If the watcher is not running, jobs will stay queued and never complete — the answer will never be generated, so the confidence field will remain `unknown` or `low`.
 - **The question is ambiguous or malformed.** The retrieval pipeline works best with clear, specific questions.
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
 - **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
@@ -49,6 +57,8 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
    curl http://localhost:4000/api/gaps/candidates
    ```
    This shows questions the system has flagged as low-confidence. Repeated similar gaps indicate a knowledge base gap.
+5. **Confirm the watcher is running:**
+   The watcher must be active for answer jobs to complete. If questions stay queued, check that a watcher process is running and that its startup log shows `Capability provider — ready`.
 
 ## How to Improve Answer Quality
 
@@ -83,7 +93,7 @@ Low confidence often means the knowledge base lacks relevant documents. Use the 
 curl http://localhost:4000/api/gaps/clusters
 ```
 
-Each cluster represents a set of related questions that a single document could resolve. Manually draft or generate a proposal:
+Each cluster represents a set of related questions that a single document could resolve. The gap reconciler (a scheduled maintenance task) clusters open gaps, drafts proposals, and publishes them as pull requests — all without manual review if automated. You can also manually draft or generate a proposal:
 
 ```bash
 curl -X POST http://localhost:4000/api/proposals/from-gap \
@@ -108,13 +118,14 @@ Markdown Magpie splits documents by headings. To improve retrieval:
 - Include relevant keywords that match the structure of your knowledge base.
 - Use prompt engineering: provide clear instructions in system prompts, specifying the desired format and level of certainty.
 
-### 6. Verify AI Provider Configuration
+### 6. Verify AI Provider and Watcher Configuration
 
-If the answer content itself is poor (not just low confidence), check the chat provider:
+If the answer content itself is poor (not just low confidence), check the chat provider and watcher:
 
 - Ensure the provider environment variables are set correctly (e.g., `OPENAI_COMPATIBLE_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`).
+- Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`.
 - Test with a simple question that should be well-covered.
-- Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart. `mock` produces deterministic answers from retrieved context without requiring API keys.
+- Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart the watcher. `mock` produces deterministic answers from retrieved context without requiring API keys.
 
 ### 7. Adjust System Parameters
 
@@ -156,7 +167,7 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | All answers are low-confidence | Knowledge index is empty | Index the flow and wait for embedding pass |
 | Low confidence on specific topics | Knowledge gap in the base | Write or generate a proposal for the missing topic |
 | Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
-| Answers are gibberish or off-topic | AI provider misconfigured or down | Check provider env vars, test with `mock` |
+| Answers are gibberish or off-topic | AI provider misconfigured or watcher down | Check provider env vars, verify watcher is running |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
 
