@@ -109,7 +109,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## The Watcher and AI Job Execution
 
-All AI work in Magpie is modeled as jobs on a pg-boss queue in Postgres, not as a hard dependency on one model vendor. **The API never calls a model inline.** There is no longer a synchronous 'direct' mode — the API does not support inline model calls. Instead, it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access.
+Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
 
 ### Job States
 
@@ -392,3 +392,5 @@ curl -s http://localhost:4000/api/config | jq .retrieval
 - [HTTP API Reference](integrations-and-connecting-data-sources.md) — endpoints for managing flows, indexing, and proposals.
 - [Ingestion Configuration](integrations-and-connecting-data-sources.md) — detailed configuration of sources, destinations, and flows.
 - [Architecture Overview](integrations-and-connecting-data-sources.md) — the product loop and how flows fit in.
+- [Configuration Reference](configuration-reference.md) — authoritative list of all environment variables and settings.
+- For execution mode details and a step-by-step setup, see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide.
