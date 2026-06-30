@@ -36,6 +36,25 @@ For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` a
 
 Only destinations (curated knowledge bases) are indexed for answering questions.
 
+### Further Examples
+
+#### Two Git Sources and One Destination
+
+```env
+MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
+KNOWLEDGE_SOURCES=[{"id":"flowerbi","name":"FlowerBI Source","url":"https://github.com/danielearwicker/flowerbi.git","subpath":"src"},{"id":"agent","name":"Agent Knowledge","kind":"agent"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"flowerbi-docs","name":"FlowerBI Docs","url":"https://github.com/AdamAwan/flowerbi-doc-test.git","subpath":"docs"}]
+KNOWLEDGE_FLOWS=[{"id":"flowerbi","name":"FlowerBI KB","sourceIds":["flowerbi","agent"],"destinationId":"flowerbi-docs"}]
+```
+
+#### Local Folder Source
+
+```env
+KNOWLEDGE_SOURCES=[{"id":"docs","name":"Product Docs","path":"knowledge-bases/product"}]
+KNOWLEDGE_DESTINATIONS=[{"id":"docs","name":"Product Docs","path":"knowledge-bases/product"}]
+KNOWLEDGE_FLOWS=[{"id":"docs","name":"Product Docs","sourceIds":["docs"],"destinationId":"docs"}]
+```
+
 ## AI Provider Configuration
 
 Set `AI_PROVIDER` to one of the following and configure the corresponding variables:
