@@ -35,7 +35,7 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **The question falls outside the scope of the indexed documents.** The knowledge base may not cover the topic, or the relevant information exists but is not effectively retrievable due to poor document structure or lack of coverage.
 - **The retrieval mode is not optimal.** Keyword-only retrieval limits the ability to match semantically similar content. Hybrid mode (keyword + vector) is recommended for best results.
 - **The embeddings are not generated.** Even with hybrid retrieval enabled, if embeddings have not been computed for indexed sections (e.g., they are still `NULL` in the database), the hybrid fallback may be keyword-only, lowering retrieval quality.
-- **No watcher is running with the required capability.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. Jobs move through states: `created` → `active` → `completed` (or `failed`). A watcher claims active jobs; if none is running, jobs remain `created` indefinitely, resulting in no answer or an answer with unknown confidence. Check the watcher's startup logs for "Capability provider — ready" or similar.
+- **No watcher is running with the required capability.** Markdown Magpie uses a queue‑only architecture: the API never calls a chat model inline. It enqueues an `answer_question` job, and a separate **watcher** process claims it, calls the configured chat provider, and posts the result back. Jobs move through states: `created` → `active` → `completed` (or `failed`, `retry`, `cancelled`, `blocked`). A watcher claims active jobs; if none is running, jobs remain `created` indefinitely, resulting in no answer or an answer with unknown confidence. Check the watcher's startup logs for "Capability provider — ready" or similar.
 - **The AI provider is not configured correctly.** The watcher advertises capabilities only when all required environment variables are set for that provider. Missing API keys, base URLs, or model names prevent the watcher from claiming jobs, leading to stalled answers and low confidence.
 - **The question is ambiguous or malformed.** The retrieval pipeline works best with clear, specific questions.
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
@@ -57,13 +57,18 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
    ```bash
    curl http://localhost:4000/api/config
    ```
-   Look for `retrieval.mode` — it should be `hybrid` for best results. Also check `ai.runtime.provider` and `ai.runtime.availableProviders` to see which watcher capabilities are active.
-4. **List gap candidates:**
+   Look for `retrieval.mode` — it should be `hybrid` for best results. Also check `ai.runtime.availableProviders` to see which watcher capabilities are active.
+4. **Inspect job schedules (cron tasks):**
+   ```bash
+   curl http://localhost:4000/api/jobs/schedules
+   ```
+   This lists pg-boss cron schedules that drive maintenance tasks such as gap drafting and patrol jobs.
+5. **List gap candidates:**
    ```bash
    curl http://localhost:4000/api/gaps/candidates
    ```
    This shows questions the system has flagged as low-confidence. Repeated similar gaps indicate a knowledge base gap.
-5. **Monitor watcher logs and confirm the watcher is running:**
+6. **Monitor watcher logs and confirm the watcher is running:**
    The watcher logs on startup which capabilities are ready. If `Capability provider — ready` is missing, verify the provider credentials. Also confirm a watcher process is running (e.g., `npm run dev:watcher` or equivalent).
 
 ## How to Improve Answer Quality
@@ -144,6 +149,10 @@ If the answer content itself is poor (not just low confidence), check the chat p
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+| `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
+| `maintenance` | (none; always available) |
+
+  The `github` capability is required for publishing proposals as pull requests. The `maintenance` capability covers scheduled tasks such as gap reconciliation, source sync, and patrol jobs.
 
 - Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
 - You can also check the active capabilities by examining the `ai.runtime.availableProviders` field in the response from `GET /api/config`.
@@ -175,6 +184,20 @@ This feeds the gap-clustering algorithm and helps prioritize which documents to 
 
 - Review low‑confidence answers to identify patterns (e.g., specific topics or question types).
 - Test changes to queries or knowledge base updates to measure improvement.
+
+## Scheduled Maintenance Tasks
+
+Markdown Magpie runs several scheduled maintenance jobs that automatically address low-confidence gaps and keep the knowledge base healthy. These tasks are configured per flow and managed from the **Schedules** page in the web console. Each scheduled task fires on its cron cadence and may fan out into one or more AI jobs:
+
+| Task label | Job type | Cadence | What it does |
+|---|---|---|---|
+| Gap drafting | `process_gaps_to_pull_requests` | ~10 min | Clusters new low-confidence answers into gaps, drafts proposals, and publishes them as pull requests.
+| Source sync | `source_change_sync` | ~10 min | Detects upstream source changes and generates update proposals.
+| Snapshot refresh | `refresh_flow_snapshot` | ~5 min | Writes a flow snapshot of gaps, proposals, and PR state for reconciler consumption.
+| Correctness patrol | `correctness_patrol` | hourly | Verifies document claims, corrects errors, deduplicates, and splits overly large files.
+| Editorial patrol | `editorial_patrol` | hourly | Improves completeness of fine-but-thin documents.
+
+These tasks operate through the same job queue as answer synthesis. The `maintenance` capability (always available) is required for the orchestrator jobs. For details, see the architecture documentation.
 
 ## Interpreting Confidence Scores
 
