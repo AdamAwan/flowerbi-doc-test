@@ -17,6 +17,8 @@ Magpie assigns a confidence score to each generated answer. This score reflects 
 
 Low confidence does not necessarily mean the answer is wrong – it indicates that the system has less assurance due to missing or conflicting evidence.
 
+In some cases, the system may return a confidence of **`unknown`**. This happens when the question router cannot determine which knowledge flow best matches the question and the answer is withheld. The caller is then asked to pick a flow and re‑ask the question. When `unknown` is returned, the answer is a short human‑readable note, no citations are provided, and a `flowSelectionRequired` field lists the available flows for the caller to choose from.
+
 ### How Retrieval Mode Affects Confidence
 
 Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching) and `hybrid` (keyword + pgvector embeddings). Hybrid mode generally yields higher relevance and confidence because it captures semantic meaning beyond exact keyword matches.
@@ -41,13 +43,14 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
 - **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
 - **Model limitations.** Smaller or less capable models may struggle with complex reasoning, leading to lower confidence even when context is sufficient.
+- **The question could not be routed to a specific knowledge flow.** When using `auto` routing, if the model abstains from choosing a flow, the answer is withheld with confidence `unknown` and a `flowSelectionRequired` field. The caller must re-ask with an explicit `flow` parameter. This is not a failure – it is a deliberate signal that the system cannot determine the correct knowledge area.
 
 ## Checking Current Answer Quality
 
 1. **Submit a question and retrieve the answer.** `POST /api/ask` returns `202` with a job object and a `questionId`; the answer is not in this response. To get the final answer:
    - Poll `GET /api/jobs/<job-id>/wait` — this long-polls until the job is terminal (**`200`** when complete, **`202`** if still running, in which case you re-issue the call).
-   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, or `low`), and citations with relevance scores.
-   Low confidence often means zero or very few citations.
+   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, `low`, or `unknown`), and citations with relevance scores. If the answer has confidence `unknown`, look for the `flowSelectionRequired` field to see which flows are available.
+   Low confidence often means zero or very few citations. When `unknown`, no citations are provided.
 2. **Review the knowledge base stats:**
    ```bash
    curl http://localhost:4000/api/knowledge/stats
@@ -205,6 +208,7 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 - Flag answers that require human review.
 - Prioritise which knowledge base sections need enrichment.
 - Compare model versions or prompt configurations.
+- When confidence is `unknown`, it means the system could not route the question – the caller should pick a flow from the returned `flowSelectionRequired` list and re-ask.
 
 ## Summary Table
 
@@ -217,5 +221,6 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with a different provider |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
+| Answer confidence is `unknown` with `flowSelectionRequired` | Router could not determine a flow | Re-ask with an explicit `flow` parameter set to one of the available flow ids |
 
 By following these steps, you can systematically raise answer confidence from low to high and close knowledge gaps over time.

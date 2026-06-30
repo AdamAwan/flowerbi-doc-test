@@ -22,6 +22,8 @@ Define sources and destinations in environment variables as JSON arrays:
 | `KNOWLEDGE_FLOWS` | Links sources to a destination for a given knowledge base. |
 | `MAGPIE_CHECKOUT_ROOT` | Local path where git repositories are cloned (default `.magpie/checkouts`). |
 
+For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
+
 Example configuration (from [`docs/ingestion.md`](docs/ingestion.md)):
 
 ```env
@@ -100,6 +102,14 @@ Markdown Magpie syncs git repositories on startup and uses them for proposal bra
 
 The `gaps-to-pull-requests` reconciler automatically advances proposals through the lifecycle: draft → ready → branch-pushed → pr-opened → merged → rejected. It polls open PRs, resolves merged proposals’ gaps, and re-indexes the destination upon merge.
 
+| Provider | Environment Variables |
+|---|---|
+| GitHub | `GITHUB_TOKEN` |
+| GitLab | `GITLAB_TOKEN` (planned) |
+| Azure DevOps | `AZURE_DEVOPS_TOKEN` (planned) |
+
+If no token is set, proposals degrade gracefully to a pushed branch.
+
 ## Deployment Integrations
 
 ### Docker Compose (Default)
@@ -142,8 +152,9 @@ The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agent
 
 ### MCP Tools
 
-- `kb.ask`: Ask a question with citations and gap detection.
+- `kb.ask`: Ask a question with citations and gap detection. Accepts an optional `flow` parameter. When `flow` is `"auto"` (default) the question is routed normally; otherwise it must be a flow id from `kb.flows`. If the router cannot determine a flow, the response includes `flowSelectionRequired` with the available flows – call `kb.ask` again with `flow` set to one of those ids.
 - `kb.search`: Search indexed sections by keyword.
+- `kb.flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb.ask`.
 - `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
 
 ### Configuration
@@ -232,6 +243,53 @@ curl -s http://localhost:4000/api/ask -H 'content-type: application/json' -d '{"
 ```
 
 Your data source is now integrated and searchable.
+
+## Step-by-Step: Connect a New Data Source
+
+1. **Add the source** to `KNOWLEDGE_SOURCES` in `.env`:
+   ```json
+   [{"id":"my-api-docs","url":"https://github.com/myorg/api-docs.git","subpath":"content"}]
+   ```
+2. **Add a destination** repository for the curated KB:
+   ```json
+   [{"id":"my-kb","url":"https://github.com/myorg/knowledge-base.git","subpath":"docs"}]
+   ```
+3. **Create a flow** linking source(s) to the destination:
+   ```json
+   [{"id":"api-kb","sourceIds":["my-api-docs"],"destinationId":"my-kb"}]
+   ```
+4. **Set `MAGPIE_CHECKOUT_ROOT`** to a writable directory and ensure the API can clone repositories.
+5. **Start the API** and index the flow:
+   ```bash
+   curl -X POST http://localhost:4000/api/knowledge/repositories/index \
+     -H 'content-type: application/json' \
+     -d '{"flowId":"api-kb"}'
+   ```
+6. **Ask a question** to verify the data is indexed:
+   ```bash
+   curl -s http://localhost:4000/api/ask \
+     -H 'content-type: application/json' \
+     -d '{"question":"How do I authenticate?"}'
+   ```
+
+## Summary
+
+Markdown Magpie integrates with:
+
+- **Data sources**: local, git, internet, agent
+- **AI providers**: mock, OpenAI‑compatible, Azure OpenAI, external CLI agents (Codex, Claude)
+- **Embedding providers**: OpenAI‑compatible, Azure OpenAI
+- **Storage**: Postgres (recommended), Redis, in‑memory
+- **Version control**: Git, GitHub (PR support), GitLab/Azure DevOps (planned)
+- **Deployment**: Docker Compose, Azure (optional)
+- **Identity**: Auth0 (optional)
+- **MCP clients**: Claude Code, Codex, any MCP‑aware tool
+
+Each integration is provider-neutral behind defined interfaces, so you can mix and match components without modifying core logic.
+
+---
+
+*Based on source material from: `README.md`, `docs/ingestion.md`, `docs/chat-providers.md`, `docs/architecture.md`, `docs/ai-jobs.md`, `docs/mcp.md`, `infra/azure/README.md`.*
 
 ## Related Documentation
 
