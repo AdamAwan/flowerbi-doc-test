@@ -78,6 +78,17 @@ AUTH_REQUIRED=false
 
 > In queue mode, the API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. Set `AUTH_REQUIRED=false` so the API and watcher can communicate without Auth0 credentials.
 
+The watcher must have the environment variables matching the chosen `AI_PROVIDER`. Below are the required variables for each provider:
+
+| Provider | Required Watcher Environment Variables |
+|----------|----------------------------------------|
+| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
+| `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
+| `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+
+Without the correct credentials, the watcher will not advertise the capability and jobs will remain queued.
+
 ## 3. Start Dependencies (Postgres + optional Redis)
 
 The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers. Redis is not required for core functionality—the queue uses Postgres via pg-boss. If you prefer not to run Redis, you can comment out the Redis service in `docker-compose.yml` or simply ignore it.
@@ -291,6 +302,24 @@ Open `http://localhost:3000` to browse the knowledge base, view questions, and m
 
 The default is `direct`. Use `queue` for production deployments where you want to decouple request handling from AI processing.
 
+## Switching AI Provider at Runtime
+
+After startup, you can change the active AI provider without restarting the API by calling `POST /api/config`. This is useful for testing different providers quickly. The request accepts either a flat or nested shape:
+
+```bash
+curl -s -X POST http://localhost:4000/api/config \
+  -H 'content-type: application/json' \
+  -d '{"aiProvider":"azure-openai"}'
+```
+
+```bash
+curl -s -X POST http://localhost:4000/api/config \
+  -H 'content-type: application/json' \
+  -d '{"ai":{"provider":"azure-openai"}}'
+```
+
+The API returns the updated configuration (same shape as `GET /api/config`). The provider must be one of: `openai-compatible`, `azure-openai`, `codex`, `claude`. It will fail with `400` if the provider is not configured (i.e., its environment variables are missing).
+
 ## Embedding Configuration (Optional)
 
 For hybrid retrieval (vector + keyword), configure an embeddings provider **independently** of the chat provider. The following sets work:
@@ -331,7 +360,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `/ask` returns `202` but never completes | The watcher is not running (in queue mode). | Start the watcher (step 7) and retry the question. |
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
-| Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars |
+| Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars, see the table in step 2 |
 | `401` on API calls | Authentication enabled but no credentials | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
