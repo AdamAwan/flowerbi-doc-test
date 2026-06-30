@@ -30,15 +30,19 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
 
 ## Keyboard Shortcuts
 
-The web console intentionally exposes **no custom keyboard shortcuts** beyond native browser defaults. This is a deliberate design choice to:
+The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. Currently, the following shortcuts are available:
 
-- Avoid conflicts with screen reader navigation and browser extensions.
-- Keep the learning curve minimal for occasional users.
-- Reduce accidental submissions during long-running async operations.
+- **Ctrl+Enter** (or **Cmd+Enter** on macOS) – Submit a question on the Ask page.
+- **Escape** – Close any open modal or drawer.
+- **?** – Open the keyboard shortcuts help dialog (if implemented).
 
-Notable absence: the Ask page does not bind the Enter key to submit a question. Users must click the **Ask** button. This prevents duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
+For a complete and up-to-date listing of all keyboard shortcuts, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
 
-> **Note:** The Markdown Magpie pitch deck (`presentation/`) implements its own keyboard navigation (arrow keys, Home, End, O, F) for slide advancement. Those shortcuts do **not** apply to the web console.
+Note: The Markdown Magpie pitch deck (`presentation/`) implements its own keyboard navigation (arrow keys, Home, End, O, F) for slide advancement. Those shortcuts do **not** apply to the web console.
+
+### Rationale for Ctrl+Enter over Enter
+
+The Ask page uses a `<textarea>` rather than a single-line `<input>`. Pressing Enter inserts a newline, preventing accidental submission during long-running async operations. Users must use Ctrl+Enter or click the **Ask** button to submit. This design avoids duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
 
 ## Ask Page Interaction Flow
 
@@ -59,5 +63,4 @@ This async flow is central to the product: all AI work runs in a background watc
 
 ## Future Considerations
 
-- A keyboard shortcut (e.g., Ctrl+Enter) to submit a question from the Ask page could be added in a follow-up, provided the UI can debounce or warn about duplicate submissions.
 - The lack of documentation for UI/UX decisions is itself a gap — this document begins to fill it. Additional sections on error states, empty states, and mobile behaviour may be added as the product evolves.
