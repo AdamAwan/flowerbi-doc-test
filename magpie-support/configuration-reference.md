@@ -98,7 +98,7 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 ## Version Control Integration (Pull Requests)
 
 | Provider | Required Variable |
-|---|---|---|
+|---|---|
 | GitHub | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | GitLab (planned) | `GITLAB_TOKEN` |
 | Azure DevOps (planned) | `AZURE_DEVOPS_TOKEN` |
