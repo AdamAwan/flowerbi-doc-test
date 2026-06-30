@@ -173,9 +173,9 @@ The API automatically runs background embedding for any section whose vector is 
 
 ### API Endpoints
 
-- `GET /api/knowledge/repositories` – list all indexed repositories (each corresponds to a flow’s destination).
+- `GET /api/knowledge/repositories` – list indexed repositories (paginated, default limit 50, capped at 200). Each response includes a `total` field with the full count.
 - `GET /api/knowledge/stats` – get total document and section counts.
-- `GET /api/knowledge/documents` – list all indexed documents across flows.
+- `GET /api/knowledge/documents` – list indexed documents across flows (paginated, default limit 50, capped at 200). Each response includes a `total` field with the full count.
 - `GET /api/config` – reports the runtime configuration, including the active retrieval mode (`hybrid` or `keyword`) and AI provider. The retrieval mode is also shown with a plain-language `reason`.
 
 ### Web Console
@@ -346,10 +346,18 @@ curl -s http://localhost:4000/api/knowledge/stats
 # {"repositoryCount":1,"documentCount":15,"sectionCount":72}
 ```
 
-List all indexed documents:
+List indexed documents (paginated, default 50 per page, capped at 200):
 
 ```bash
-curl -s http://localhost:4000/api/knowledge/documents
+curl -s 'http://localhost:4000/api/knowledge/documents?limit=100'
+# Response: {"documents":[...],"total":15}
+```
+
+List indexed repositories (paginated similarly):
+
+```bash
+curl -s 'http://localhost:4000/api/knowledge/repositories'
+# Response: {"repositories":[...],"total":1}
 ```
 
 Check the active retrieval mode and provider via `/api/config`:
