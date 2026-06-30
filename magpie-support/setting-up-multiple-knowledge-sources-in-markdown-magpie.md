@@ -11,6 +11,21 @@ Markdown Magpie can ingest content from multiple sources and route them to one o
 
 Each knowledge source is a location where raw Markdown lives. Each destination is a curated knowledge base that the system indexes for answering questions. **Flows** link sources to destinations. You configure all of this in your `.env` file.
 
+> **Note:** The destination must already exist as a local folder or git checkout. For git destinations, use the same shape as the git source but with a `url`.
+
+## How Sources Work
+
+Sources are defined in the environment variable `KNOWLEDGE_SOURCES` as a JSON array of source objects. Each source has:
+
+- `id` – unique identifier within your configuration
+- `name` – human‑readable label
+- `kind` – one of `local`, `git`, `internet`, or `agent`
+- Additional fields depending on the kind (see below)
+
+You then connect one or more source IDs to a destination via `KNOWLEDGE_FLOWS`. The destination is defined in `KNOWLEDGE_DESTINATIONS`.
+
+> **Legacy fallback:** The older `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` environment variables are still supported when the new variables are not set. However, the source/destination/flow model described above is the preferred configuration.
+
 ## Configuring Sources and Destinations
 
 Use the following environment variables:
@@ -71,6 +86,63 @@ KNOWLEDGE_DESTINATIONS=[{"id":"all-knowledge","name":"All Knowledge","path":"kno
 KNOWLEDGE_FLOWS=[{"id":"full-flow","name":"Full Flow","sourceIds":["local-docs","github-api","external-guide","agent-knowledge"],"destinationId":"all-knowledge"}]
 ```
 
+### Example: Two Git Repositories + an Agent Source
+
+If you maintain documentation across separate repositories (e.g., user guide and API reference) and also want to include agent‑generated proposals, use:
+
+```env
+KNOWLEDGE_SOURCES=[
+  {"id":"user-guide","name":"User Guide","kind":"git","url":"https://github.com/org/user-guide.git","subpath":"docs"},
+  {"id":"api-ref","name":"API Reference","kind":"git","url":"https://github.com/org/api-ref.git","subpath":"reference"},
+  {"id":"agent-feedback","name":"Agent Feedback","kind":"agent"}
+]
+
+KNOWLEDGE_DESTINATIONS=[
+  {"id":"combined-docs","name":"Combined Docs","kind":"local","path":"knowledge-bases/combined"}
+]
+
+KNOWLEDGE_FLOWS=[
+  {"id":"full-kb","name":"Full Knowledge Base","sourceIds":["user-guide","api-ref","agent-feedback"],"destinationId":"combined-docs"}
+]
+```
+
+- `agent` kind requires no additional fields; it tells Magpie to treat agent‑generated proposals as source material.
+- The `subpath` in git sources lets you point to a subdirectory within the cloned repo (e.g., `docs` or `src`).
+
+### Example: Single Source, Multiple Destinations (Advanced)
+
+You can also propagate the same source material to multiple curated KBs by defining multiple flows:
+
+```env
+KNOWLEDGE_SOURCES=[
+  {"id":"core","name":"Core Docs","kind":"local","path":"knowledge-bases/core"}
+]
+
+KNOWLEDGE_DESTINATIONS=[
+  {"id":"public-kb","name":"Public KB","kind":"local","path":"knowledge-bases/public"},
+  {"id":"internal-kb","name":"Internal KB","kind":"local","path":"knowledge-bases/internal"}
+]
+
+KNOWLEDGE_FLOWS=[
+  {"id":"public","name":"Public Flow","sourceIds":["core"],"destinationId":"public-kb"},
+  {"id":"internal","name":"Internal Flow","sourceIds":["core"],"destinationId":"internal-kb"}
+]
+```
+
+Each flow can be indexed independently:
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"public"}'
+```
+
+```bash
+curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
+  -H 'content-type: application/json' \
+  -d '{"flowId":"internal"}'
+```
+
 ## Indexing the Configured Flow
 
 After setting the environment variables and starting the API and watcher (see the main README), index the destination:
@@ -97,11 +169,27 @@ To search across all indexed content:
 curl -s 'http://localhost:4000/api/knowledge/search?q=your+keyword'
 ```
 
+You can also verify your configuration is loaded correctly:
+
+```bash
+curl -s http://localhost:4000/api/config | jq .
+```
+
+Look for `repositories` and the configured flows in the output.
+
 ## Additional Notes
 
 - **`KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH`** are legacy fallbacks; prefer the explicit source/destination/flow variables.
 - **`MAGPIE_CHECKOUT_ROOT`** must be set to a writable local directory when using git sources or destinations.
 - **Agent sources** (`{"kind":"agent"}`) are for knowledge that an AI agent (like Claude) feeds back; they are not indexed directly.
 - **Internet sources** are fetched at index time; the content is downloaded and treated as raw source.
+- Sources with kind `agent` or `internet` are used for drafting proposals but are **not indexed** into the answer corpus.
+- **Destination existence**: The destination must already exist as a local folder or git checkout. For git destinations, use the same shape as the git source but with a `url`.
 
 For full details on ingestion and the API, see [ingestion.md](../docs/ingestion.md) and [api.md](../docs/api.md).
+
+## Related
+
+- [Integrations and Data Sources](./integrations-and-data-sources-in-markdown-magpie.md)
+- [Knowledge Flows](./managing-knowledge-flows-in-magpie.md)
+- [Ingestion](./ingestion.md)
