@@ -197,3 +197,10 @@ To see which capabilities are ready, check the watcher startup logs:
 - `watcher` – watcher settings (if configured).
 
 This endpoint is useful for troubleshooting and for clients that need to know the current system state.
+
+## See Also
+
+- [Chat Providers](chat-providers.md) — detailed provider configuration
+- [AI Job Contract](ai-jobs.md) — watcher capabilities and job routing
+- [Ingestion](ingestion.md) — embedding configuration and hybrid retrieval
+- [Architecture](architecture.md) — provider strategy overview
