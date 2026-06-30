@@ -42,11 +42,12 @@ Set `AI_PROVIDER` to one of the following and configure the corresponding variab
 
 | Provider | `AI_PROVIDER` value | Required Variables | Notes |
 |---|---|---|---|
-| Mock (deterministic) | `mock` | None | |
 | OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | |
 | Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | |
 | Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` | `CODEX_CLI_PATH` defaults to `codex` on `PATH` if unset. |
 | Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` | `CLAUDE_CLI_PATH` defaults to `claude` on `PATH` if unset. |
+
+**Note:** The `mock` provider has been removed. `AI_PROVIDER` must now name a supported provider from the table above.
 
 **Execution Modes**
 
@@ -80,8 +81,8 @@ All AI work is enqueued to a pg‑boss queue in Postgres. The API never calls a 
 
 | Variable | Description | Default |
 |---|---|---|
-| `JOB_WAIT_TIMEOUT_MS` | Maximum time (ms) for a single long‑poll wait call on a job. | (not set) |
-| `JOB_WAIT_POLL_MS` | Server‑side poll interval (ms) when waiting for a job to complete. | (not set) |
+| `JOB_WAIT_TIMEOUT_MS` | Maximum time (ms) for a single long‑poll wait call on a job. | 25000 |
+| `JOB_WAIT_POLL_MS` | Server‑side poll interval (ms) when waiting for a job to complete. | 250 |
 | `JOB_SCHEDULE_TIMEZONE` | Timezone for scheduled jobs (e.g., crunch). | `UTC` |
 
 Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
