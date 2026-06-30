@@ -5,30 +5,9 @@ status: draft
 
 # Adding Multiple Sources to Markdown Magpie – Practical Examples
 
-Markdown Magpie supports ingesting content from multiple sources into a single knowledge base flow. This guide provides **real, copy‑paste‑ready examples** for configuring two, three, or more sources of different kinds (local folders, git repositories, internet URLs, agent‑sourced content).
+This page provides ready-to-use examples of multi-source configurations. For full setup instructions, see [Setting Up Multiple Knowledge Sources](./setting-up-multiple-knowledge-sources-in-markdown-magpie.md). All examples assume you have set `MAGPIE_CHECKOUT_ROOT` if using git sources.
 
-## How Sources Work
-
-Sources are defined in the environment variable `KNOWLEDGE_SOURCES` as a JSON array of source objects. Each source has:
-
-- `id` – unique identifier within your configuration
-- `name` – human‑readable label
-- `kind` – one of `local`, `git`, `internet`, or `agent`
-- Additional fields depending on the kind (see below)
-
-You then connect one or more source IDs to a destination via `KNOWLEDGE_FLOWS`. The destination is defined in `KNOWLEDGE_DESTINATIONS`.
-
-## Example 1: Local Folder + Git Repository + Internet Source
-
-This example configures three sources:
-
-- A local Markdown folder (`knowledge-bases/product`)
-- A remote git repository (FlowerBI source, cloned into `MAGPIE_CHECKOUT_ROOT`)
-- An internet documentation site (fetched at index time)
-
-All three feed into a single curated destination (`kb-output`).
-
-### Environment Variables
+## Example 1: Local + Git + Internet
 
 ```env
 MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
@@ -48,23 +27,7 @@ KNOWLEDGE_FLOWS=[
 ]
 ```
 
-> **Note:** The destination must already exist as a local folder or git checkout. For git destinations, use the same shape as the git source example but with a `url`.
-
-### Indexing the Flow
-
-After starting the API and watcher, trigger indexing:
-
-```bash
-curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
-  -H 'content-type: application/json' \
-  -d '{"flowId":"main"}'
-```
-
-This indexes the **destination** (`kb-output`). The sources are used only during proposal generation and gap detection; they are **not** directly queryable via `/api/ask`.
-
-## Example 2: Two Git Repositories + an Agent Source
-
-If you maintain documentation across separate repositories (e.g., user guide and API reference) and also want to include agent‑generated proposals, use:
+## Example 2: Two Git Repositories + Agent Feedback
 
 ```env
 KNOWLEDGE_SOURCES=[
@@ -82,12 +45,7 @@ KNOWLEDGE_FLOWS=[
 ]
 ```
 
-- `agent` kind requires no additional fields; it tells Magpie to treat agent‑generated proposals as source material.
-- The `subpath` in git sources lets you point to a subdirectory within the cloned repo (e.g., `docs` or `src`).
-
-## Example 3: Single Source, Multiple Destinations (Advanced)
-
-You can also propagate the same source material to multiple curated KBs by defining multiple flows:
+## Example 3: Single Source, Multiple Destinations
 
 ```env
 KNOWLEDGE_SOURCES=[
@@ -105,32 +63,4 @@ KNOWLEDGE_FLOWS=[
 ]
 ```
 
-Each flow can be indexed independently:
-
-```bash
-curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
-  -H 'content-type: application/json' \
-  -d '{"flowId":"public"}'
-```
-
-```bash
-curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \
-  -H 'content-type: application/json' \
-  -d '{"flowId":"internal"}'
-```
-
-## Verifying Your Configuration
-
-After everything is running, check the health endpoint to see resolved sources:
-
-```bash
-curl -s http://localhost:4000/api/config | jq .
-```
-
-Look for `repositories` and the configured flows.
-
-## Related
-
-- [Integrations and Data Sources](./integrations-and-data-sources-in-markdown-magpie.md)
-- [Ingestion](./ingestion.md)
-- [Knowledge Flows](./managing-knowledge-flows-in-magpie.md)
+For verification and indexing, refer to the main setup guide.
