@@ -15,6 +15,10 @@ Authentication is provided by the `@magpie/auth` package, which validates JSON W
 - **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
 - **Local development** – With `AUTH_REQUIRED=false` (the default), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`, and `MCP_API_AUTH_TOKEN`) are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials are configured.)
 
+### Watcher Authentication
+
+The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When `AUTH_REQUIRED=true`, the watcher must authenticate to the API using a service token. For the default stdio transport, the watcher uses the `MCP_AUTH_TOKEN` environment variable as a bearer token on every API call. For Streamable HTTP deployments, the watcher uses `MCP_API_AUTH_TOKEN` instead. If these tokens are missing when authentication is enabled, the watcher fails fast at startup and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
+
 ## API‑Level Access Control
 
 The HTTP API (port 4000) currently delegates all permission decisions to the application layer. In the current implementation:
@@ -104,6 +108,7 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
+- The background watcher authenticates to the API with a service token (`MCP_AUTH_TOKEN` or `MCP_API_AUTH_TOKEN`) when authentication is enabled.
 
 ---
 
