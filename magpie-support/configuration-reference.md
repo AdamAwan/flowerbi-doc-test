@@ -49,10 +49,6 @@ Set `AI_PROVIDER` to one of the following and configure the corresponding variab
 
 **Note:** The `mock` provider has been removed. `AI_PROVIDER` must now name a supported provider from the table above.
 
-**Execution Modes**
-
-Set `AI_EXECUTION_MODE` to `direct` (synchronous) or `queue` (async with watcher). Default: `direct`.
-
 ## Embedding Provider Configuration
 
 Embeddings are configured independently of the chat provider. Set one of the following groups to enable hybrid retrieval (keyword + vector):
@@ -108,7 +104,7 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 ## Authentication (Auth0 / Entra ID)
 
-Set `AUTH_REQUIRED=true` to enable authentication. Then configure one of the following:
+Authentication is optional and off by default. Set `AUTH_REQUIRED=true` to enable authentication. When enabled, configure one of the following:
 
 **Auth0:**
 ```env
@@ -125,6 +121,12 @@ Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
 - `MCP_API_AUTH_TOKEN`: Token used by the MCP HTTP server for downstream API calls.
 
 Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
+
+**Watcher M2M tokens:**
+- `WATCHER_API_CLIENT_ID`: Client ID used by the watcher to authenticate to the API when `AUTH_REQUIRED=true`.
+- `WATCHER_API_CLIENT_SECRET`: Client secret for the watcher M2M token.
+
+These are required when `AUTH_REQUIRED=true` and the watcher is active.
 
 ## MCP Server Configuration
 
@@ -149,7 +151,7 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 |---|---|
 | Docker Compose | Use `docker compose up`; application containers require `profile=app`. |
 | Azure Container Apps | See `infra/azure/README.md`. |
-| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. |
+| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. For web development, set `MAGPIE_DEV_API_PROXY=http://localhost:4000` so the web dev server proxies API requests. |
 
 The default production shape is Docker Compose.
 
