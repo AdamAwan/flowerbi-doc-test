@@ -157,7 +157,7 @@ If the answer content itself is poor (not just low confidence), check the chat p
 - Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
 - You can also check the active capabilities by examining the `ai.runtime.availableProviders` field in the response from `GET /api/config`.
 - Test with a simple question that should be well-covered. If the job stays queued, consult the watcher logs for errors.
-- Switch to the `mock` provider to isolate issues: set `AI_PROVIDER=mock` and restart the watcher. `mock` produces deterministic answers from retrieved context without requiring API keys.
+- To isolate provider issues, temporarily switch to a known-working provider (e.g., `openai-compatible` with a test endpoint) or choose a different provider from the table above.
 
 ### 7. Adjust System Parameters
 
@@ -214,7 +214,7 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | Low confidence on specific topics | Knowledge gap in the base | Write or generate a proposal for the missing topic |
 | Retrieval mode is `keyword` | Embeddings not configured | Set embedding provider and re-index |
 | No answer or job never completes | No watcher running or missing capability | Start watcher, check credentials, verify startup logs |
-| Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with `mock` |
+| Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with a different provider |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
 

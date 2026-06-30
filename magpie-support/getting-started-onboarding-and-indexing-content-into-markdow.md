@@ -54,7 +54,7 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-Edit `.env` to set at minimum. The exact settings depend on whether you use **direct** or **queue** mode:
+Edit `.env` to set at minimum. The exact settings depend on whether you use **direct** or **queue** mode.
 
 ### For Direct Mode (default, no watcher needed):
 
@@ -62,17 +62,17 @@ Edit `.env` to set at minimum. The exact settings depend on whether you use **di
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
 AI_EXECUTION_MODE=direct
-AI_PROVIDER=mock
+AI_PROVIDER=openai-compatible
 ```
 
-> **Note:** `AI_PROVIDER=mock` uses a deterministic answer generator – no API key needed. For real AI features, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations).
+> **Note:** `AI_PROVIDER=openai-compatible` requires `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, and `OPENAI_COMPATIBLE_MODEL` to be set. For other provider options, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations). The `mock` provider has been removed.
 
 ### For Queue Mode (requires a watcher process):
 
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
-AI_PROVIDER=mock
+AI_PROVIDER=openai-compatible
 AUTH_REQUIRED=false
 ```
 
@@ -182,7 +182,7 @@ AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 ```
 
-> The watcher is **required** for all generative work when in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The mock provider works out of the box — no additional credentials needed.
+> The watcher is **required** for all generative work when in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The openai-compatible provider needs the corresponding environment variables set.
 
 If you use `AI_EXECUTION_MODE=direct` (the default), questions are answered synchronously and no watcher is needed.
 
@@ -210,7 +210,7 @@ The API will:
 3. Store sections in the in‑memory search index and persist them to Postgres.
 4. Kick off a background task to embed any sections whose embedding is `NULL` (if an embeddings provider is configured).
 
-After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With the mock provider, answers are still returned even without embeddings, but confidence scores may be lower.
+After indexing, background embedding runs automatically. For the best search and answer quality, wait until the API logs `Embedded N section(s); 0 remaining` before asking questions. With a configured provider, answers are still returned even without embeddings, but confidence scores may be lower.
 
 The POST request returns a summary:
 
@@ -331,7 +331,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `/ask` returns `202` but never completes | The watcher is not running (in queue mode). | Start the watcher (step 7) and retry the question. |
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
-| Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars; for mock no extra variables needed |
+| Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars |
 | `401` on API calls | Authentication enabled but no credentials | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
