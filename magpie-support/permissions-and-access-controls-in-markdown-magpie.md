@@ -19,15 +19,15 @@ Authentication is provided by the `@magpie/auth` package, which validates JSON W
 
 The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When authentication is enabled (the default), the watcher must authenticate to the API. The preferred method is using Auth0 client-credentials: set both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` together. As a fallback, the legacy `API_TOKEN` environment variable is also accepted. If none of these are set when authentication is enabled, the watcher fails fast at startup with an aggregated error and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
 
-Note: The MCP server uses its own tokens (`MCP_AUTH_TOKEN` for stdio, `MCP_API_AUTH_TOKEN` for HTTP) to authenticate to the API; these are separate from the watcher credentials.
+Note: The MCP server uses its own tokens (`MCP_AUTH_TOKEN` for stdio, `MCP_API_AUTH_TOKEN` for HTTP) to authenticate to the API; these are separate from the watcher credentials. In earlier versions, the watcher used the MCP server's tokens for its own authentication; this is now deprecated in favour of dedicated watcher credentials.
 
 ## API‑Level Access Control
 
-The HTTP API (port 4000) currently delegates all permission decisions to the application layer. In the current implementation:
+The HTTP API (port 4000) currently delegates permission decisions to the application layer. In the current implementation:
 
-- Most endpoints are **unauthenticated** – they accept any request. The `POST /api/admin/reset` endpoint is explicitly documented as unauthenticated and destructive, and it must not be exposed in production ([api.md](docs/api.md)).
-- The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow” ([architecture.md](docs/architecture.md)), but concrete permission checks are not yet implemented for every operation.
-- Planned improvements include role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware.
+- Most endpoints are **unauthenticated** by default – they accept any request, but some endpoints now enforce scoped authorization. For example, `POST /api/gaps/clusters/:id/proposal` requires the `manage:knowledge` scope. The `POST /api/admin/reset` endpoint remains explicitly documented as unauthenticated and destructive; it must not be exposed in production ([api.md](docs/api.md)).
+- The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow” ([architecture.md](docs/architecture.md)), and concrete permission checks have been implemented for several operations (e.g., proposal-from-cluster). More scoped checks are planned.
+- Planned improvements include additional role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware as the auth model evolves.
 
 ## MCP Server Access Control (Granular Permissions)
 
@@ -122,7 +122,7 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 - By default, authentication is required (fail-closed). Set `AUTH_REQUIRED=false` to run without authentication for local development.
 - In production, ensure Auth0 (or Entra ID) is configured and the required tokens are set.
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
-- The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
+- The API is evolving toward full role‑based access control; the current codebase enforces authentication and scoped authorization on several endpoints, including the proposal-from-cluster endpoint (`manage:knowledge`), in addition to the MCP layer.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
 - The background watcher authenticates to the API with its own client-credentials (`WATCHER_API_CLIENT_ID` + `WATCHER_API_CLIENT_SECRET`) or the legacy `API_TOKEN` when authentication is enabled.
 
