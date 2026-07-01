@@ -139,13 +139,16 @@ Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
 - `MCP_AUTH_TOKEN`: Token used by the MCP stdio server to authenticate to the API.
 - `MCP_API_AUTH_TOKEN`: Token used by the MCP HTTP server for downstream API calls.
 
-Both are required when auth is enabled (the default, unless `AUTH_REQUIRED=false`).
+Both are required when auth is enabled (the default, unless `AUTH_REQUIRED=false`) and the MCP server is active.
 
 **Watcher M2M tokens:**
-- `WATCHER_API_CLIENT_ID`: Client ID used by the watcher to authenticate to the API when auth is enabled.
-- `WATCHER_API_CLIENT_SECRET`: Client secret for the watcher M2M token.
+- `WATCHER_API_CLIENT_ID`: Client ID used by the watcher to authenticate to the API when auth is enabled. Must be set together with `WATCHER_API_CLIENT_SECRET`.
+- `WATCHER_API_CLIENT_SECRET`: Client secret for the watcher M2M token. Must be set together with `WATCHER_API_CLIENT_ID`.
+- `API_TOKEN`: (Legacy) Static token used by the watcher as an alternative to the client-credentials pair.
 
-These are required when auth is enabled (the default) and the watcher is active.
+At least one of the following must be set when auth is enabled (the default) and the watcher is active:
+- Both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` (preferred), or
+- `API_TOKEN` (legacy fallback).
 
 ## MCP Server Configuration
 

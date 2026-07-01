@@ -13,11 +13,13 @@ Authentication is provided by the `@magpie/auth` package, which validates JSON W
 
 - **Auth0 configuration** – Authentication is required by default (fail-closed). When enabled, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. To disable authentication, set `AUTH_REQUIRED=false`. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`).
 - **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
-- **Local development** – With `AUTH_REQUIRED=false` (explicitly disabling auth), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`, and `MCP_API_AUTH_TOKEN`) are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials are configured.)
+- **Local development** – With `AUTH_REQUIRED=false` (explicitly disabling auth), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`) and the legacy `API_TOKEN` are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials or the legacy token are configured.)
 
 ### Watcher Authentication
 
-The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When authentication is enabled (the default), the watcher must authenticate to the API using a service token. For the default stdio transport, the watcher uses the `MCP_AUTH_TOKEN` environment variable as a bearer token on every API call. For Streamable HTTP deployments, the watcher uses `MCP_API_AUTH_TOKEN` instead. If these tokens are missing when authentication is enabled, the watcher fails fast at startup and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
+The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When authentication is enabled (the default), the watcher must authenticate to the API. The preferred method is using Auth0 client-credentials: set both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` together. As a fallback, the legacy `API_TOKEN` environment variable is also accepted. If none of these are set when authentication is enabled, the watcher fails fast at startup with an aggregated error and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
+
+Note: The MCP server uses its own tokens (`MCP_AUTH_TOKEN` for stdio, `MCP_API_AUTH_TOKEN` for HTTP) to authenticate to the API; these are separate from the watcher credentials.
 
 ## API‑Level Access Control
 
@@ -71,8 +73,11 @@ All authentication variables are shared between the API and MCP server via the `
 | `AUTH0_DOMAIN` | – | Alternative to issuer base; issuer becomes `https://<domain>/`. |
 | `AUTH0_AUDIENCE` | `https://markdown-magpie.local/api` | API identifier the token must carry. |
 | `AUTH0_JWKS_URI` | Derived from issuer | JWKS endpoint for token validation. |
-| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API. Required when auth is enabled. |
-| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls. Required when auth is enabled. |
+| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API by the MCP server. Required when auth is enabled. |
+| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls by the MCP server. Required when auth is enabled. |
+| `WATCHER_API_CLIENT_ID` | – | Client ID for the watcher's M2M credential. Required with `WATCHER_API_CLIENT_SECRET` when auth is enabled. |
+| `WATCHER_API_CLIENT_SECRET` | – | Client secret for the watcher's M2M credential. Required with `WATCHER_API_CLIENT_ID` when auth is enabled. |
+| `API_TOKEN` | – | Legacy static token for the watcher; alternative to M2M credentials when auth is enabled. |
 
 ## Future Directions
 
@@ -91,14 +96,25 @@ AUTH0_AUDIENCE=https://markdown-magpie.local/api
 MCP_AUTH_TOKEN=eyJhbGci...
 ```
 
+For the watcher, set either the M2M credentials or the legacy token:
+```env
+# Option 1: client credentials (preferred)
+WATCHER_API_CLIENT_ID=your-client-id
+WATCHER_API_CLIENT_SECRET=your-client-secret
+
+# Option 2: legacy static token
+API_TOKEN=your-static-token
+```
+
 ### Enable Per‑Tool Scopes (MCP HTTP)
 
-Add the MCP HTTP server service token and ensure the client tokens contain the appropriate scopes. The HTTP server’s own token is used for API calls and does not need scopes.
+Add the MCP HTTP server service token and ensure the client tokens contain the appropriate scopes. The HTTP server's own token is used for API calls and does not need scopes.
 
 ```env
 AUTH_REQUIRED=true
 MCP_API_AUTH_TOKEN=eyJhbGci...
 # Also set Auth0 issuer and audience as above.
+# For the watcher, set WATCHER_API_CLIENT_ID/WATCHER_API_CLIENT_SECRET or API_TOKEN as needed.
 ```
 
 ## Summary
@@ -108,7 +124,7 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
-- The background watcher authenticates to the API with a service token (`MCP_AUTH_TOKEN` or `MCP_API_AUTH_TOKEN`) when authentication is enabled.
+- The background watcher authenticates to the API with its own client-credentials (`WATCHER_API_CLIENT_ID` + `WATCHER_API_CLIENT_SECRET`) or the legacy `API_TOKEN` when authentication is enabled.
 
 ---
 
