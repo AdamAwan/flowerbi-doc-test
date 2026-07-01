@@ -8,7 +8,7 @@ review_cycle_days: 90
 
 > **Note:** This guide consolidates content from the [Quick Start](quick-start.md) document, which has been deprecated. For the most current instructions, refer to this guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md).
 
-> **Architecture note:** Markdown Magpie supports two execution modes. In `direct` mode (default), the API calls the AI model synchronously and answers are returned immediately. In `queue` mode, the API enqueues jobs that a separate **watcher** process claims and completes. If you use queue mode, you must also start the watcher (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The examples in this guide use direct mode unless otherwise noted.
+> **Architecture note:** Markdown Magpie uses a queue-only architecture for all generative (chat) AI work: the API never calls a chat model inline. It enqueues a job on a pg-boss queue in Postgres; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. Embeddings are the one exception — the API computes them inline (it holds an embedding provider) for indexing and query-time retrieval. The watcher is **required** for any generative work (answers, proposals, drafting, maintenance). Without a running watcher, `POST /api/ask` returns a 202 job that never completes.
 
 # Getting Started: Onboarding and Indexing Content into Markdown Magpie
 
@@ -27,7 +27,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - The HTTP API (`@magpie/api`) on port 4000.
 - A Postgres database (with `pgvector`) reachable via `DATABASE_URL`.
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
-- **Watcher (required for queue mode):** If you set `AI_EXECUTION_MODE=queue`, you must also run the watcher process (see [Step 7](#7-start-the-watcher-required-for-queue-mode)). The default `direct` mode does not require a watcher.
+- **Watcher (required for all generative work):** Because the API never calls a chat model inline, you must run the watcher process (see [Step 7](#7-start-the-watcher)). Without it, questions will be enqueued but never answered.
 
 > **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank. Docker Compose starts Postgres only by default; if you need Redis, add it to your compose file.
 
@@ -54,31 +54,17 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-Edit `.env` to set at minimum. The exact settings depend on whether you use **direct** or **queue** mode.
-
-### For Direct Mode (default, no watcher needed):
+Edit `.env` to set at minimum:
 
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
 STORAGE_BACKEND=postgres
-AI_EXECUTION_MODE=direct
 AI_PROVIDER=openai-compatible
 ```
 
 > **Note:** `AI_PROVIDER=openai-compatible` requires `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, and `OPENAI_COMPATIBLE_MODEL` to be set. For other provider options, see [Chat Providers](integrations-and-connecting-data-sources.md#ai-provider-integrations). The `mock` provider has been removed.
 
-### For Queue Mode (requires a watcher process):
-
-```env
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/markdown_magpie
-STORAGE_BACKEND=postgres
-AI_PROVIDER=openai-compatible
-AUTH_REQUIRED=false
-```
-
-> In queue mode, the API never calls an AI model directly — it enqueues jobs that a separate **watcher** process claims and completes. Set `AUTH_REQUIRED=false` so the API and watcher can communicate without Auth0 credentials.
-
-The watcher must have the environment variables matching the chosen `AI_PROVIDER`. Below are the required variables for each provider:
+The watcher will need the environment variables matching the chosen `AI_PROVIDER`. Below are the required variables for each provider:
 
 | Provider | Required Watcher Environment Variables |
 |----------|----------------------------------------|
@@ -103,7 +89,7 @@ Wait for Postgres to be healthy:
 until [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy ]; do sleep 2; done
 ```
 
-> **Note:** If you are using queue mode and have set `QUEUE_URL` to a Redis connection, ensure Redis is also started. By default, the queue uses Postgres via pg‑boss, so Redis is optional.
+> **Note:** By default, the queue uses Postgres via pg‑boss, so Redis is optional.
 
 ## 4. Run Migrations
 
@@ -184,18 +170,16 @@ The API will be available at `http://localhost:4000`. Verify with:
 curl localhost:4000/api/health
 ```
 
-## 7. Start the Watcher (Required for Queue Mode)
+## 7. Start the Watcher
 
-If you set `AI_EXECUTION_MODE=queue`, start the watcher in a separate terminal so it can claim and complete AI jobs:
+The watcher must be running for any generative AI work (answering questions, drafting proposals, publishing, and maintenance jobs). Start it in a separate terminal:
 
 ```bash
 AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 ```
 
-> The watcher is **required** for all generative work when in queue mode: answering questions, drafting proposals, publishing, and maintenance jobs. Without it, `POST /api/ask` will return `202` and the question will never be answered. The openai-compatible provider needs the corresponding environment variables set.
-
-If you use `AI_EXECUTION_MODE=direct` (the default), questions are answered synchronously and no watcher is needed.
+> Without the watcher, `POST /api/ask` will return `202` and the question will never be answered. The watcher advertises capabilities based on the provider credentials in its environment; ensure the chosen provider's environment variables are set.
 
 ## 8. Index Your Content
 
@@ -238,26 +222,20 @@ The POST request returns a summary:
 
 ## 9. Ask a Question
 
-In **direct** mode (the default), the API responds synchronously:
+The API is **enqueue-only** for questions. It records the question, returns `202` with a job ID, and enqueues an `answer_question` job for the watcher. To get the answer, poll the job endpoint:
 
 ```bash
 curl -s http://localhost:4000/api/ask \
   -H 'content-type: application/json' \
   -d '{"question":"What topics does my knowledge base cover?"}'
-```
+# Response includes job.id and questionId
 
-You should receive an answer with citations and a confidence rating.
-
-In **queue** mode, the API is enqueue-only. It records the question, returns `202` with a job ID, and enqueues an `answer_question` job for the watcher. To wait for the answer:
-
-```bash
-# After getting the 202 response
 JOB_ID="..."  # from the response's job.id
 curl -s "http://localhost:4000/api/jobs/$JOB_ID/wait"
 curl -s "http://localhost:4000/api/questions/<question-id>"
 ```
 
-> **Note:** The `/ask` endpoint is **enqueue-only** when in queue mode: it records the question, returns `202` with a job ID, and enqueues an `answer_question` job for the watcher. To wait for the answer, use the `wait` link. The question ID is returned as `questionId` in the 202 response.
+The `wait` endpoint long-polls: returns **`200`** when the job is complete, **`202`** if still running (re-issue the call). The question ID is returned as `questionId` in the 202 response.
 
 ## 10. Verify Indexing
 
@@ -292,15 +270,6 @@ MAGPIE_DEV_API_PROXY="http://localhost:4000" npm run dev:web
 ```
 
 Open `http://localhost:3000` to browse the knowledge base, view questions, and manage proposals.
-
-## Execution Modes: Direct vs Queue
-
-| Mode | `AI_EXECUTION_MODE` | API Behaviour | Watcher Required |
-|------|---------------------|---------------|------------------|
-| Direct | `direct` | Synchronous; API calls AI provider inline and returns answer in the response. | No |
-| Queue | `queue` | Asynchronous; API enqueues a job and returns `202`. A watcher must claim and complete the job. | Yes |
-
-The default is `direct`. Use `queue` for production deployments where you want to decouple request handling from AI processing.
 
 ## Switching AI Provider at Runtime
 
@@ -349,7 +318,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 - **Retrieval mode** is `keyword` by default. To enable hybrid (keyword + vector) search, configure Postgres with pgvector and an embedding provider.
 - **No bundled knowledge base is provided.** The `knowledge-bases/` directory is intentionally empty; configure your own sources and destinations.
 - **Redis is not required** – the queue uses Postgres via pg-boss, so you can safely omit or disable the Redis container.
-- **Queue vs Direct:** In queue mode, the watcher is mandatory. In direct mode, answers are synchronous.
+- **Watcher is required** for all generative work; without it, jobs are queued but never completed.
 
 ## Troubleshooting
 
@@ -358,7 +327,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | `curl localhost:4000/api/health` fails | API not started or port conflict | Check the terminal running the API; kill other processes on port 4000 |
 | Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` defined in `KNOWLEDGE_FLOWS` |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
-| `/ask` returns `202` but never completes | The watcher is not running (in queue mode). | Start the watcher (step 7) and retry the question. |
+| `/ask` returns `202` but never completes | The watcher is not running. | Start the watcher (step 7) and retry the question. |
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
 | Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars, see the table in step 2 |
 | `401` on API calls | Authentication enabled but no credentials | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
@@ -368,7 +337,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | Bootstrap fails with permission error | Override `MAGPIE_CHECKOUT_ROOT` to a writable local path | Use the command from step 6 |
 | “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set |
-| `/api/ask` returns 202 (queued) | `AI_EXECUTION_MODE=queue` is set | Switch to `direct` or start a watcher process |
+| `/api/ask` returns 202 (queued) | This is normal; the answer is being processed | Poll `GET /api/jobs/<id>/wait` until the job completes |
 | Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
 | New document not found in search | Index did not run after adding the file | Run index endpoint again. |
 | Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |

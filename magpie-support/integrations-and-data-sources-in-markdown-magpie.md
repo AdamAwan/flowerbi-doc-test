@@ -62,7 +62,7 @@ Markdown Magpie keeps AI provider logic behind pluggable adapters. You can confi
 
 ### Chat Providers
 
-Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised.
+Set `AI_PROVIDER` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them.
 
 | Provider | Environment Variables | Notes |
 |---|---|---|
@@ -70,12 +70,7 @@ Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised
 | `openai-compatible` | `AI_PROVIDER=openai-compatible`, `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | Works with any OpenAI-compatible API (OpenAI, DeepSeek, OpenRouter, etc.). |
 | `azure-openai` | `AI_PROVIDER=azure-openai`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI service. |
 
-Execution modes:
-
-- **`direct`** (default): The API calls the provider synchronously during `/api/ask`.
-- **`queue`**: The API enqueues an `answer_question` job; a separate watcher process claims and processes the job.
-
-Switch at runtime via the API or web console (see [`POST /api/config`](docs/api.md)).
+All generative work is enqueued. The watcher must be running for jobs to complete. Switch providers at runtime via `POST /api/config`.
 
 ### Embedding Providers
 
@@ -96,7 +91,7 @@ Markdown Magpie syncs git repositories on startup and uses them for proposal bra
 
 - **Source sync**: Sources and destinations defined with `url` are cloned or fast-forwarded into `MAGPIE_CHECKOUT_ROOT` during API startup and on the `source-change-sync` background task.
 - **Proposal branches**: Proposals are committed to a new branch (`magpie/proposal-*`) using the `local-git` publisher. If a `GITHUB_TOKEN` is provided, the branch is also raised as a pull request.
-- **Crunch branches**: Knowledge-base tidy operations are published to `magpie/crunch-*` branches.
+- **Patrol proposals**: Maintenance patrol operations create proposals that are published to `magpie/proposal-*` branches, following the same lifecycle.
 
 ### Pull Request Provider
 
