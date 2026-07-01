@@ -154,6 +154,12 @@ Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
 
 These are required when `AUTH_REQUIRED=true` and the watcher is active.
 
+## CORS Configuration
+
+| Variable | Description | Default |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for the Access-Control-Allow-Origin header. Unset or `"*"` allows any origin. Set to a comma-separated list to restrict. | `*` |
+
 ## MCP Server Configuration
 
 The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess) and `streamable-http` (persistent HTTP on port 4001). Configure via:
