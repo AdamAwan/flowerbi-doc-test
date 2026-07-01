@@ -5,19 +5,19 @@ status: draft
 
 # Permissions and Access Controls in Markdown Magpie
 
-Markdown Magpie does not enforce authentication or authorization by default in local development. In production and managed deployments, access controls are optional and configured via environment variables. The system supports both a simple API‑wide authentication mode and a more granular per‑tool permission model for the MCP server.
+Markdown Magpie authentication **fails closed**: it is required unless explicitly disabled with `AUTH_REQUIRED=false`. In local development you can opt out by setting `AUTH_REQUIRED=false`. In production and managed deployments, the default is enforced authentication. The system supports both a simple API‑wide authentication mode and a more granular per‑tool permission model for the MCP server.
 
 ## Authentication Architecture
 
 Authentication is provided by the `@magpie/auth` package, which validates JSON Web Tokens (JWTs) against an external OpenID Connect provider. The default and recommended identity provider is Auth0 (or Microsoft Entra ID for Azure deployments).
 
-- **Auth0 configuration** – When `AUTH_REQUIRED=true`, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`).
+- **Auth0 configuration** – Authentication is required by default (fail-closed). When enabled, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. To disable authentication, set `AUTH_REQUIRED=false`. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`).
 - **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
-- **Local development** – With `AUTH_REQUIRED=false` (the default), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`, and `MCP_API_AUTH_TOKEN`) are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials are configured.)
+- **Local development** – With `AUTH_REQUIRED=false` (explicitly disabling auth), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`, and `MCP_API_AUTH_TOKEN`) are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials are configured.)
 
 ### Watcher Authentication
 
-The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When `AUTH_REQUIRED=true`, the watcher must authenticate to the API using a service token. For the default stdio transport, the watcher uses the `MCP_AUTH_TOKEN` environment variable as a bearer token on every API call. For Streamable HTTP deployments, the watcher uses `MCP_API_AUTH_TOKEN` instead. If these tokens are missing when authentication is enabled, the watcher fails fast at startup and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
+The background watcher process (`@magpie/watcher`) communicates with the API to claim and complete jobs. When authentication is enabled (the default), the watcher must authenticate to the API using a service token. For the default stdio transport, the watcher uses the `MCP_AUTH_TOKEN` environment variable as a bearer token on every API call. For Streamable HTTP deployments, the watcher uses `MCP_API_AUTH_TOKEN` instead. If these tokens are missing when authentication is enabled, the watcher fails fast at startup and cannot claim jobs. In local development with `AUTH_REQUIRED=false`, ensure these credentials are unset to prevent the watcher from sending an Authorization header.
 
 ## API‑Level Access Control
 
@@ -33,7 +33,7 @@ The MCP server (`apps/mcp`) supports a more mature permission model when authent
 
 ### Transport‑Specific Authentication
 
-- **stdio transport** – The server authenticates to the API using a single service token (`MCP_AUTH_TOKEN`). If `AUTH_REQUIRED=true` and the token is missing, the server fails fast at startup.
+- **stdio transport** – The server authenticates to the API using a single service token (`MCP_AUTH_TOKEN`). If authentication is enabled (default) and the token is missing, the server fails fast at startup.
 - **Streamable HTTP transport** – The server acts as an OAuth protected resource. It exposes protected‑resource metadata at `/.well-known/oauth-protected-resource` and requires a valid bearer token on every request to the `/mcp` endpoint. Tokens are validated locally against the Auth0 JWKS and are never forwarded to the API. Instead, the HTTP server uses its own machine‑to‑machine credential (`MCP_API_AUTH_TOKEN`) for downstream API calls.
 
 ### Per‑Tool Scopes (HTTP Transport)
@@ -66,13 +66,13 @@ All authentication variables are shared between the API and MCP server via the `
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AUTH_REQUIRED` | `false` | Enable authentication. |
+| `AUTH_REQUIRED` | `true` (fail-closed) | Set `false` to disable authentication; any other/unset value keeps it required. |
 | `AUTH0_ISSUER_BASE_URL` | – | Full Auth0 issuer (e.g., `https://your-tenant.eu.auth0.com`). |
 | `AUTH0_DOMAIN` | – | Alternative to issuer base; issuer becomes `https://<domain>/`. |
 | `AUTH0_AUDIENCE` | `https://markdown-magpie.local/api` | API identifier the token must carry. |
 | `AUTH0_JWKS_URI` | Derived from issuer | JWKS endpoint for token validation. |
-| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API. Required when `AUTH_REQUIRED=true`. |
-| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls. Required when `AUTH_REQUIRED=true`. |
+| `MCP_AUTH_TOKEN` | – | stdio only: bearer token presented to the API. Required when auth is enabled. |
+| `MCP_API_AUTH_TOKEN` | – | HTTP only: service token for API calls. Required when auth is enabled. |
 
 ## Future Directions
 
@@ -103,8 +103,8 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 
 ## Summary
 
-- By default Magpie runs with no authentication – suitable for local development and internal demos.
-- In production, enable authentication via Auth0 (or Entra ID) using the `AUTH_REQUIRED` flag.
+- By default, authentication is required (fail-closed). Set `AUTH_REQUIRED=false` to run without authentication for local development.
+- In production, ensure Auth0 (or Entra ID) is configured and the required tokens are set.
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication only at the MCP layer and for the admin reset endpoint.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.

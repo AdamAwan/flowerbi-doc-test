@@ -189,7 +189,7 @@ Redis is started by Docker Compose but is not required for default setup. It wil
 
 ## Authentication
 
-Authentication is optional. When enabled via `AUTH_REQUIRED=true`, tokens from Auth0 are validated locally using JWKS.
+Authentication **fails closed**: it is required unless explicitly disabled via `AUTH_REQUIRED=false`. When enabled, tokens from Auth0 are validated locally using JWKS.
 
 - **API**: Validates `Authorization: Bearer <token>` on endpoint requests.
 - **MCP HTTP**: Acts as an OAuth protected resource; requires per-tool scopes (`read:knowledge`, `ask:knowledge`, `feedback:questions`).
