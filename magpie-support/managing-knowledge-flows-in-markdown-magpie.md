@@ -109,7 +109,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## The Watcher and AI Job Execution
 
-Markdown Magpie uses a queue-only architecture for all generative (chat) AI work. The API never calls a chat model inline — it enqueues a job on a pg-boss queue in Postgres; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. Embeddings are the exception: the API computes them inline (it holds an embedding provider) for indexing and query-time retrieval. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access.
+Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). Embeddings are the exception: the API computes them inline (it holds an embedding provider) for indexing and query-time retrieval. For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
 
 ### Job States
 
