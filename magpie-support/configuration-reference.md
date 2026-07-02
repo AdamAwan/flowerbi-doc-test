@@ -121,9 +121,16 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 `MAGPIE_GIT_AUTHOR_NAME` and `MAGPIE_GIT_AUTHOR_EMAIL` are used as the Git author identity when creating commits and pull requests. If no token is set, proposals are pushed to a branch but no PR is created.
 
+### Source Change Sync & Git Clone
+
+| Variable | Description | Default |
+|---|---|---|
+| `SOURCE_SYNC_MAX_CHANGED_FILES` | Maximum number of changed files to materialize downstream (into retrieval and model) when a commit touches many files. The true total is still recorded on the run. | 1000 |
+| `GIT_PARTIAL_CLONE` | Set to `0`, `false`, or `off` to disable blobless partial cloning. Partial clones defer historical file blobs, reducing initial clone time. | `true` (enabled) |
+
 ## Authentication (Auth0 / Entra ID)
 
-Authentication is optional and off by default. Set `AUTH_REQUIRED=true` to enable authentication. When enabled, configure one of the following:
+Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. When enabled, configure one of the following:
 
 **Auth0:**
 ```env
@@ -139,13 +146,22 @@ Alternatively, `AUTH0_DOMAIN` can be used instead of `AUTH0_ISSUER_BASE_URL`.
 - `MCP_AUTH_TOKEN`: Token used by the MCP stdio server to authenticate to the API.
 - `MCP_API_AUTH_TOKEN`: Token used by the MCP HTTP server for downstream API calls.
 
-Both are required when `AUTH_REQUIRED=true` and the MCP server is active.
+Both are required when auth is enabled (the default, unless `AUTH_REQUIRED=false`) and the MCP server is active.
 
 **Watcher M2M tokens:**
-- `WATCHER_API_CLIENT_ID`: Client ID used by the watcher to authenticate to the API when `AUTH_REQUIRED=true`.
-- `WATCHER_API_CLIENT_SECRET`: Client secret for the watcher M2M token.
+- `WATCHER_API_CLIENT_ID`: Client ID used by the watcher to authenticate to the API when auth is enabled. Must be set together with `WATCHER_API_CLIENT_SECRET`.
+- `WATCHER_API_CLIENT_SECRET`: Client secret for the watcher M2M token. Must be set together with `WATCHER_API_CLIENT_ID`.
+- `API_TOKEN`: (Legacy) Static token used by the watcher as an alternative to the client-credentials pair.
 
-These are required when `AUTH_REQUIRED=true` and the watcher is active.
+At least one of the following must be set when auth is enabled (the default) and the watcher is active:
+- Both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` (preferred), or
+- `API_TOKEN` (legacy fallback).
+
+## CORS Configuration
+
+| Variable | Description | Default |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for the Access-Control-Allow-Origin header. Unset or `"*"` allows any origin. Set to a comma-separated list to restrict. | `*` |
 
 ## MCP Server Configuration
 
