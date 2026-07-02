@@ -29,6 +29,12 @@ The HTTP API (port 4000) currently delegates permission decisions to the applica
 - The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow” ([architecture.md](docs/architecture.md)), and concrete permission checks have been implemented for several operations (e.g., proposal-from-cluster). More scoped checks are planned.
 - Planned improvements include additional role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware as the auth model evolves.
 
+### CORS and Security Headers
+
+CORS is open by default (`access-control-allow-origin: *`); `OPTIONS` preflight requests return `204`. For production deployments, set `CORS_ALLOWED_ORIGINS` to a comma-separated allow-list (e.g. the web console origin) to restrict which origins may call the API ([api.md](docs/api.md)).
+
+Every API response carries standard security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, and `Strict-Transport-Security`. HSTS is only honoured by browsers over HTTPS; TLS termination is assumed to happen upstream. The same headers are emitted by the MCP HTTP server and the web app ([api.md](docs/api.md)).
+
 ## MCP Server Access Control (Granular Permissions)
 
 The MCP server (`apps/mcp`) supports a more mature permission model when authentication is enabled. This is the primary surface for agent‑driven access.
@@ -78,6 +84,7 @@ All authentication variables are shared between the API and MCP server via the `
 | `WATCHER_API_CLIENT_ID` | – | Client ID for the watcher's M2M credential. Required with `WATCHER_API_CLIENT_SECRET` when auth is enabled. |
 | `WATCHER_API_CLIENT_SECRET` | – | Client secret for the watcher's M2M credential. Required with `WATCHER_API_CLIENT_ID` when auth is enabled. |
 | `API_TOKEN` | – | Legacy static token for the watcher; alternative to M2M credentials when auth is enabled. |
+| `CORS_ALLOWED_ORIGINS` | – (open CORS) | Comma-separated list of allowed origins for API requests; restricts cross-origin access in production. |
 
 ## Future Directions
 
@@ -117,6 +124,12 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 # For the watcher, set WATCHER_API_CLIENT_ID/WATCHER_API_CLIENT_SECRET or API_TOKEN as needed.
 ```
 
+### Restrict CORS to Web Console
+
+```env
+CORS_ALLOWED_ORIGINS=https://your-web-console.example.com
+```
+
 ## Summary
 
 - By default, authentication is required (fail-closed). Set `AUTH_REQUIRED=false` to run without authentication for local development.
@@ -125,6 +138,7 @@ MCP_API_AUTH_TOKEN=eyJhbGci...
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication and scoped authorization on several endpoints, including the proposal-from-cluster endpoint (`manage:knowledge`), in addition to the MCP layer.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
 - The background watcher authenticates to the API with its own client-credentials (`WATCHER_API_CLIENT_ID` + `WATCHER_API_CLIENT_SECRET`) or the legacy `API_TOKEN` when authentication is enabled.
+- CORS defaults to open; set `CORS_ALLOWED_ORIGINS` in production. Standard security headers are applied to all API, MCP, and web responses.
 
 ---
 
