@@ -109,7 +109,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## The Watcher and AI Job Execution
 
-Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
+Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API — they do not share a checkout volume. Instead, each service has its own named volume (`magpie-api-checkouts` and `magpie-watcher-checkouts`) to prevent git operation races. The watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
 
 ### Job States
 
@@ -173,9 +173,9 @@ The API automatically runs background embedding for any section whose vector is 
 
 ### API Endpoints
 
-- `GET /api/knowledge/repositories` – list all indexed repositories (each corresponds to a flow’s destination).
+- `GET /api/knowledge/repositories` – list indexed repositories (paginated, default limit 50, capped at 200). Each response includes a `total` field with the full count.
 - `GET /api/knowledge/stats` – get total document and section counts.
-- `GET /api/knowledge/documents` – list all indexed documents across flows.
+- `GET /api/knowledge/documents` – list indexed documents across flows (paginated, default limit 50, capped at 200). Each response includes a `total` field with the full count.
 - `GET /api/config` – reports the runtime configuration, including the active retrieval mode (`hybrid` or `keyword`) and AI provider. The retrieval mode is also shown with a plain-language `reason`.
 
 ### Web Console
@@ -346,10 +346,18 @@ curl -s http://localhost:4000/api/knowledge/stats
 # {"repositoryCount":1,"documentCount":15,"sectionCount":72}
 ```
 
-List all indexed documents:
+List indexed documents (paginated, default 50 per page, capped at 200):
 
 ```bash
-curl -s http://localhost:4000/api/knowledge/documents
+curl -s 'http://localhost:4000/api/knowledge/documents?limit=100'
+# Response: {"documents":[...],"total":15}
+```
+
+List indexed repositories (paginated similarly):
+
+```bash
+curl -s 'http://localhost:4000/api/knowledge/repositories'
+# Response: {"repositories":[...],"total":1}
 ```
 
 Check the active retrieval mode and provider via `/api/config`:
