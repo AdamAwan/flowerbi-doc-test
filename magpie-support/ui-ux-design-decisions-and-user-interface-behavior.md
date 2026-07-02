@@ -26,6 +26,7 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
   - **Knowledge**: List and search indexed documents and sections.
   - **Proposals**: Review draft Markdown proposals, change their status, and publish them.
   - **Crunch**: View scheduled tidy runs, trigger new runs, and publish crunch plans.
+- The console also includes a **Schedules** page for managing background job schedules (e.g., patrol cadences) and a **Dataflow** page (`/dataflow`) that visualises the job type fan-out with an interactive diagram.
 - The layout uses responsive CSS; the sidebar collapses on narrow screens.
 
 ## Keyboard Shortcuts
@@ -60,7 +61,7 @@ This async flow is central to the product: all AI work runs in a background watc
 
 - **Simplicity over complexity**: The console is a tool, not a marketing site. Excessive styling or animations would distract from the review tasks.
 - **Async-first**: Since `POST /api/ask` is enqueue-only, the UI must accommodate a wait. The current design avoids hiding this — it shows the job state rather than simulating instant answers.
-- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines). These libraries provide a solid baseline for accessibility and interaction.
+- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines, as well as the Dataflow diagram). These libraries provide a solid baseline for accessibility and interaction.
 - **No inline editing**: To keep the UI predictable, all editing of knowledge content is performed via proposals and published pull requests, not directly in the web console.
 
 ## Future Considerations
