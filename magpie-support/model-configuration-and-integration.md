@@ -131,7 +131,7 @@ Key endpoints for integration:
 | `POST /api/proposals/from-gap` | Create a proposal draft from a gap cluster. |
 | `POST /api/proposals/:id/publish` | Publish a proposal as a git branch and pull request. |
 
-All endpoints accept and return JSON. CORS is open (`access-control-allow-origin: *`).
+All endpoints accept and return JSON. CORS defaults to open (`access-control-allow-origin: *`) but can be restricted by setting `CORS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Every response also includes standard security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Strict-Transport-Security`).
 
 ### MCP Server
 

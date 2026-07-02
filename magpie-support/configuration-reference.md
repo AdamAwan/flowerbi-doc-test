@@ -121,6 +121,13 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 `MAGPIE_GIT_AUTHOR_NAME` and `MAGPIE_GIT_AUTHOR_EMAIL` are used as the Git author identity when creating commits and pull requests. If no token is set, proposals are pushed to a branch but no PR is created.
 
+### Source Change Sync & Git Clone
+
+| Variable | Description | Default |
+|---|---|---|
+| `SOURCE_SYNC_MAX_CHANGED_FILES` | Maximum number of changed files to materialize downstream (into retrieval and model) when a commit touches many files. The true total is still recorded on the run. | 1000 |
+| `GIT_PARTIAL_CLONE` | Set to `0`, `false`, or `off` to disable blobless partial cloning. Partial clones defer historical file blobs, reducing initial clone time. | `true` (enabled) |
+
 ## Authentication (Auth0 / Entra ID)
 
 Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. When enabled, configure one of the following:
@@ -149,6 +156,12 @@ Both are required when auth is enabled (the default, unless `AUTH_REQUIRED=false
 At least one of the following must be set when auth is enabled (the default) and the watcher is active:
 - Both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` (preferred), or
 - `API_TOKEN` (legacy fallback).
+
+## CORS Configuration
+
+| Variable | Description | Default |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for the Access-Control-Allow-Origin header. Unset or `"*"` allows any origin. Set to a comma-separated list to restrict. | `*` |
 
 ## MCP Server Configuration
 
