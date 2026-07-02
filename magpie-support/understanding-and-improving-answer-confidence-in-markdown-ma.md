@@ -73,6 +73,12 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
    This shows questions the system has flagged as low-confidence. Repeated similar gaps indicate a knowledge base gap.
 6. **Monitor watcher logs and confirm the watcher is running:**
    The watcher logs on startup which capabilities are ready. If `Capability provider — ready` is missing, verify the provider credentials. Also confirm a watcher process is running (e.g., `npm run dev:watcher` or equivalent).
+7. **Check deep readiness and build identity:**
+   ```bash
+   curl http://localhost:4000/api/ready
+   curl http://localhost:4000/api/version
+   ```
+   `/api/ready` reports whether Postgres and the job broker are reachable (returns `200` when ready, `503` otherwise). `/api/version` shows the deployed commit's short SHA, subject line, and committer date, which is useful for confirming which build is running.
 
 ## How to Improve Answer Quality
 
@@ -109,7 +115,7 @@ Low confidence often means the knowledge base lacks relevant documents. Use the 
 curl http://localhost:4000/api/gaps/clusters
 ```
 
-Each cluster represents a set of related questions that a single document could resolve. The `gaps-to-pull-requests` reconciler (a scheduled maintenance job) automatically clusters gaps, drafts proposals for uncovered clusters, publishes them as pull requests, and advances proposals as their PRs merge or close. You can also manually draft or generate a proposal:
+Each cluster represents a set of related questions that a single document could resolve. The `gaps-to-pull-requests` reconciler (a scheduled maintenance job) automatically clusters gaps, drafts proposals for uncovered clusters, publishes them as pull requests, and advances proposals as their PRs merge or close. Before clustering, the reconciler prunes resolved gaps (those whose proposals have merged) and dismisses off-topic clusters that are unrelated to the knowledge base, preventing unnecessary proposals. You can also manually draft or generate a proposal:
 
 ```bash
 curl -X POST http://localhost:4000/api/proposals/from-gap \
@@ -194,11 +200,11 @@ Markdown Magpie runs several scheduled maintenance jobs that automatically addre
 
 | Task label | Job type | Cadence | What it does |
 |---|---|---|---|
-| Gap drafting | `process_gaps_to_pull_requests` | ~10 min | Clusters new low-confidence answers into gaps, drafts proposals, and publishes them as pull requests.
-| Source sync | `source_change_sync` | ~10 min | Detects upstream source changes and generates update proposals.
-| Snapshot refresh | `refresh_flow_snapshot` | ~5 min | Writes a flow snapshot of gaps, proposals, and PR state for reconciler consumption.
-| Correctness patrol | `correctness_patrol` | hourly | Verifies document claims, corrects errors, deduplicates, and splits overly large files.
-| Editorial patrol | `editorial_patrol` | hourly | Improves completeness of fine-but-thin documents.
+| Gap drafting | `process_gaps_to_pull_requests` | ~10 min | Clusters new low-confidence answers into gaps, prunes resolved gaps, dismisses off-topic clusters, drafts proposals for uncovered clusters, and publishes them as pull requests. |
+| Source sync | `source_change_sync` | ~10 min | Detects upstream source changes and generates update proposals. |
+| Snapshot refresh | `refresh_flow_snapshot` | ~5 min | Writes a flow snapshot of gaps, proposals, and PR state for reconciler consumption. |
+| Correctness patrol | `correctness_patrol` | hourly | Verifies document claims, corrects errors, deduplicates, and splits overly large files. |
+| Editorial patrol | `editorial_patrol` | hourly | Improves completeness of fine-but-thin documents. |
 
 These tasks operate through the same job queue as answer synthesis. The `maintenance` capability (always available) is required for the orchestrator jobs. For details, see the architecture documentation.
 
