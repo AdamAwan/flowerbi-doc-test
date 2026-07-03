@@ -149,7 +149,7 @@ Jobs follow the pg-boss lifecycle: `created` → `active` → `completed` (termi
 
 ### MCP Server
 
-The MCP server provides tools (`kb.ask`, `kb.search`, `kb.feedback`) for agent clients. It supports two transports:
+The MCP server provides tools (`kb_ask`, `kb_search`, `kb_feedback`) for agent clients. It supports two transports:
 
 - **stdio**: launched as a subprocess. Run:
   ```bash

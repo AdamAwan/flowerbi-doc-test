@@ -176,9 +176,9 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 
 | Tool | Scope |
 |---|---|
-| `kb.search` | `read:knowledge` |
-| `kb.ask` | `ask:knowledge` |
-| `kb.feedback` | `feedback:questions` |
+| `kb_search` | `read:knowledge` |
+| `kb_ask` | `ask:knowledge` |
+| `kb_feedback` | `feedback:questions` |
 
 ## Deployment Configuration
 

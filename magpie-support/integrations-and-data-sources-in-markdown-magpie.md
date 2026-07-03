@@ -151,11 +151,11 @@ The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agent
 
 ### MCP Tools
 
-- `kb.ask`: Ask a question with citations and gap detection. Accepts an optional `flow` parameter. When `flow` is `"auto"` (default) the question is routed normally; otherwise it must be a flow id from `kb.flows`. If the router cannot determine a flow, the response includes `flowSelectionRequired` with the available flows – call `kb.ask` again with `flow` set to one of those ids.
-- `kb.search`: Search indexed sections by keyword.
-- `kb.flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb.ask`.
-- `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
-- `kb.seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb.flows`.
+- `kb_ask`: Ask a question with citations and gap detection. Accepts an optional `flow` parameter. When `flow` is `"auto"` (default) the question is routed normally; otherwise it must be a flow id from `kb_flows`. If the router cannot determine a flow, the response includes `flowSelectionRequired` with the available flows – call `kb_ask` again with `flow` set to one of those ids.
+- `kb_search`: Search indexed sections by keyword.
+- `kb_flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb_ask`.
+- `kb_feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
+- `kb_seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb_flows`.
 
 ### Configuration
 
