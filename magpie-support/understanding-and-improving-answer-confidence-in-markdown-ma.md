@@ -158,10 +158,11 @@ If the answer content itself is poor (not just low confidence), check the chat p
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+| `local-git` | `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` (and git on `PATH`) |
 | `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | `maintenance` | (none; always available) |
 
-  The `github` capability is required for publishing proposals as pull requests. The `maintenance` capability covers scheduled tasks such as gap reconciliation, source sync, and patrol jobs.
+  The `github` capability is required for publishing proposals as pull requests. The `local-git` capability publishes proposals to file:// destinations (branch push only, no PR). The `maintenance` capability covers scheduled tasks such as gap reconciliation, source sync, and patrol jobs.
 
 - Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
 - You can also check the active capabilities by examining the `ai.runtime.availableProviders` field in the response from `GET /api/config`.

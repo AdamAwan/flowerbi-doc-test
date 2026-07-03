@@ -119,7 +119,7 @@ A job moves through these states (mirroring pg-boss):
 
 ### Watcher Capabilities
 
-A watcher advertises a **capability** for each provider whose credentials are present in its environment, plus `maintenance` (always available). The API only routes a job to a capability a running watcher actually offers, so a job stays queued until a capable watcher is running.
+A watcher advertises a **capability** for each provider or service whose credentials are present in its environment, plus `maintenance` (always available). The API only routes a job to a capability a running watcher actually offers, so a job stays queued until a capable watcher is running.
 
 | Capability | Required env |
 | --- | --- |
@@ -127,8 +127,11 @@ A watcher advertises a **capability** for each provider whose credentials are pr
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+| `local-git` | `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` (and git on `PATH`) |
 | `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | `maintenance` | (none) |
+
+Note: A watcher with `github` credentials also satisfies `local-git` (it has git + author identity), so it can publish to both remote and local destinations. `local-git` alone publishes only to `file://` destinations (push, no PR).
 
 ### Client Flow
 
@@ -232,7 +235,7 @@ When the gap detector finds missing knowledge, the recommended workflow is:
    ```
    The API enqueues a `draft_markdown_proposal` job. When the watcher completes it, the generated Markdown is stored as a proposal.
 3. Review the draft proposal via `GET /api/proposals` or the web console's **Proposals** page.
-4. Once `ready`, publish it: the system commits to a branch and (if a host token is configured) opens a pull request.
+4. Once `ready`, publish it: the system commits to a branch and (if the destination is a GitHub remote) opens a pull request.
 5. After review and merge, the new document is part of the destination.
 
 ### Removing Documents
@@ -299,7 +302,7 @@ Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-conf
 1. Groups related gaps into clusters. Optionally reshapes clusters (merge/split) via a provider‑partitioned AI job — if no chat watcher is available, reshape is skipped.
 2. Drafts Markdown proposals that fill those gaps (scoped to a cluster's still-open gaps only).
 3. Publishes them to a Git branch in the flow's destination repository.
-4. Opens a pull request (if a token for the remote host is configured) and advances the proposal as the PR is merged.
+4. Opens a pull request (if the destination is a GitHub remote) and advances the proposal as the PR is merged.
 5. Checks open pull requests: when a PR merges, the associated gaps are resolved and the knowledge base is re-indexed; if a PR closes without merging, the proposal is marked `rejected`.
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
@@ -316,7 +319,7 @@ POST /api/proposals/:id/status
 POST /api/proposals/:id/publish
 ```
 
-Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch, pushes it, and opens a pull request. The proposal records the branch, commit SHA, and PR URL. If no host token is available, it degrades gracefully to a pushed branch.
+Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch and pushes it. For a GitHub destination it then opens a pull request; for a local-git (file://) destination it stops at the pushed branch (no PR to open). The proposal records the branch, commit SHA, and (for GitHub) PR URL. If no host token is available, it degrades gracefully to a pushed branch.
 
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
