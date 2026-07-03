@@ -45,9 +45,11 @@ Content-Type: application/json
 }
 ```
 
-This triggers an `outline_flow_seed` AI job that proposes a list of items grounded in the flow's existing documentation. The output is a job result you can inspect and then use as the basis for your own seed call.
+This triggers an `outline_flow_seed` AI job that proposes a list of items grounded in the flow's existing documentation. The API grounds the job by retrieving the closest destination sections for the topic using inline embeddings (the same mechanism the gap reconciler uses for scope grounding) and passes them as context along with the flow persona — so the model proposes documents that fit the current structure and avoid restating what is already covered. The job returns `{ items: SeedItem[], rationale }`; it **only proposes** and drafts nothing. Its output is stored on the job record and can be read back via `GET /api/jobs/:id/wait`. There is no completion side-effect or new stored entity. The outline endpoint requires the `manage:jobs` scope (and `manage` on the target flow) and returns the enqueued job id.
 
-Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable – that variable is used to define the git or local paths that the flow indexes for ongoing operations. Seeds are strictly inline content in API requests.
+You can then inspect the proposed outline and use it as the basis for your own seed call.
+
+Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable – that variable is used to define the git or local paths that the flow indexes for ongoing operations. Seeds are strictly inline content in API requests. Both the seed and outline endpoints require the `manage:jobs` scope and `manage` on the target flow; they return the enqueued job ids.
 
 ## How Seeding Integrates with Indexing and Embedding
 
@@ -65,7 +67,7 @@ Embedding of the new content happens when you trigger a re‑index of the flow (
 ## Step-by-Step Process
 
 1. **Identify what to seed** – either a topic (for outline generation) or a set of explicit items.
-2. **Optionally generate an outline** – call `POST /api/flows/:flowId/outline` to get a machine‑proposed list of items.
+2. **Optionally generate an outline** – call `POST /api/flows/:flowId/outline` to get a machine‑proposed list of items. The proposed list is available by polling the returned job id via `GET /api/jobs/:id/wait`.
 3. **Review and edit the outline** – ensure the proposed items match your intent.
 4. **Submit the seed** – call `POST /api/flows/:flowId/seed` with your final `items` array.
 5. **Wait for drafting to complete** – the API returns enqueued job ids. Poll `GET /api/jobs/:id/wait` for each job until it finishes.
