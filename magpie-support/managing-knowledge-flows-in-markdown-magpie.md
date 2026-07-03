@@ -109,7 +109,7 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## The Watcher and AI Job Execution
 
-Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API — they do not share a checkout volume. Instead, each service has its own named volume (`magpie-api-checkouts` and `magpie-watcher-checkouts`) to prevent git operation races. The watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
+Markdown Magpie supports two execution modes: `direct` (synchronous) and `queue` (asynchronous with a watcher). The queue architecture (pg-boss on Postgres) underlies all AI work, regardless of execution mode. In **queue mode**, the API never calls a model inline — it enqueues a job; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. The API and watcher share only the HTTP API and the managed-checkout volume — the watcher has no direct database access. In **direct mode**, the API calls the AI model synchronously and returns the answer immediately (see the [Getting Started](getting-started-onboarding-and-indexing-content-into-markdow.md) guide for configuration). Embeddings are the exception: the API computes them inline (it holds an embedding provider) for indexing and query-time retrieval. For full details on execution modes, including the synchronous `direct` mode, see the [Configuration Reference](configuration-reference.md#ai-provider-configuration).
 
 ### Job States
 
@@ -123,7 +123,7 @@ A watcher advertises a **capability** for each provider or service whose credent
 
 | Capability | Required env |
 | --- | --- |
-| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+claude --teleport session_01X6SEed1h4BU1fFod1qp4hE| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |

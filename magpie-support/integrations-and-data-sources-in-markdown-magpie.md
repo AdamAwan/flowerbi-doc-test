@@ -24,7 +24,7 @@ Define sources and destinations in environment variables as JSON arrays:
 
 For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
 
-Example configuration (from [`docs/ingestion.md`](docs/ingestion.md)):
+Example configuration:
 
 ```env
 MAGPIE_CHECKOUT_ROOT=.magpie/checkouts
@@ -62,20 +62,18 @@ Markdown Magpie keeps AI provider logic behind pluggable adapters. You can confi
 
 ### Chat Providers
 
-Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised.
+Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them. `AI_EXECUTION_MODE` can be `direct` (synchronous, API calls the model) or `queue` (asynchronous via watcher).
 
 | Provider | Environment Variables | Notes |
 |---|---|---|
-| `mock` | `AI_PROVIDER=mock` | Deterministic responses, no API key required. Default for development. |
 | `openai-compatible` | `AI_PROVIDER=openai-compatible`, `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | Works with any OpenAI-compatible API (OpenAI, DeepSeek, OpenRouter, etc.). |
 | `azure-openai` | `AI_PROVIDER=azure-openai`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI service. |
+| `codex` | `AI_PROVIDER=codex`, `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` | Uses a local Codex CLI. |
+| `claude` | `AI_PROVIDER=claude`, `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` | Uses a local Claude CLI. |
 
-Execution modes:
+> **Note:** The `mock` provider has been removed. For the current list of supported providers and their required variables, see the [Configuration Reference](configuration-reference.md).
 
-- **`direct`** (default): The API calls the provider synchronously during `/api/ask`.
-- **`queue`**: The API enqueues an `answer_question` job; a separate watcher process claims and processes the job.
-
-Switch at runtime via the API or web console (see [`POST /api/config`](docs/api.md)).
+Switch providers at runtime via `POST /api/config`. The provider must be configured in environment variables for the change to be accepted.
 
 ### Embedding Providers
 
@@ -96,7 +94,8 @@ Markdown Magpie syncs git repositories on startup and uses them for proposal bra
 
 - **Source sync**: Sources and destinations defined with `url` are cloned or fast-forwarded into `MAGPIE_CHECKOUT_ROOT` during API startup and on the `source-change-sync` background task.
 - **Proposal branches**: Proposals are committed to a new branch (`magpie/proposal-*`) using the `local-git` publisher. If a `GITHUB_TOKEN` is provided, the branch is also raised as a pull request.
-- **Crunch branches**: Knowledge-base tidy operations are published to `magpie/crunch-*` branches.
+- **Patrol proposals**: Maintenance patrol operations create proposals that are published to `magpie/proposal-*` branches, following the same lifecycle.
+- **Crunch branches**: Knowledge-base tidy operations are published to `magpie/crunch-*` branches (legacy; patrol proposals are the current approach).
 
 ### Pull Request Provider
 
@@ -156,6 +155,7 @@ The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agent
 - `kb.search`: Search indexed sections by keyword.
 - `kb.flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb.ask`.
 - `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
+- `kb.seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb.flows`.
 
 ### Configuration
 
@@ -174,7 +174,8 @@ The watcher can use a local CLI tool as the AI provider, enabling integration wi
 | `codex` | `AI_PROVIDER=codex`, `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` (arg or stdin). |
 | `claude` | `AI_PROVIDER=claude`, `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE`. |
 | `openai-compatible` | Same as chat provider but for watcher process; uses `AI_PROVIDER=openai-compatible`. |
-| `mock` | Deterministic mock provider for testing. |
+
+> **Note:** The `mock` provider has been removed. Use one of the providers above or see the [Configuration Reference](configuration-reference.md) for the full list.
 
 The agent must return JSON matching the job output schema. The watcher validates and posts results back to the API.
 
@@ -190,7 +191,7 @@ Redis is started by Docker Compose but is not required for default setup. It wil
 
 ## Authentication
 
-Authentication **fails closed**: it is required unless explicitly disabled via `AUTH_REQUIRED=false`. When enabled, tokens from Auth0 are validated locally using JWKS.
+Authentication **fails closed**: it is required by default unless explicitly disabled via `AUTH_REQUIRED=false`. When enabled, tokens from Auth0 are validated locally using JWKS.
 
 - **API**: Validates `Authorization: Bearer <token>` on endpoint requests.
 - **MCP HTTP**: Acts as an OAuth protected resource; requires per-tool scopes (`read:knowledge`, `ask:knowledge`, `feedback:questions`).
@@ -209,8 +210,10 @@ KNOWLEDGE_DESTINATIONS=[{"id":"my-dest","url":"https://github.com/org/mykb.git",
 KNOWLEDGE_FLOWS=[{"id":"myflow","sourceIds":["my-source"],"destinationId":"my-dest"}]
 STORAGE_BACKEND=postgres
 DATABASE_URL=postgres://...
-AI_PROVIDER=mock
+AI_PROVIDER=openai-compatible
 ```
+
+> **Note:** The `mock` provider has been removed. Use `openai-compatible` or another supported provider. For a complete list, see the [Configuration Reference](configuration-reference.md).
 
 2. **Start Postgres** (if not already running):
 
@@ -277,7 +280,7 @@ Your data source is now integrated and searchable.
 Markdown Magpie integrates with:
 
 - **Data sources**: local, git, internet, agent
-- **AI providers**: mock, OpenAI‑compatible, Azure OpenAI, external CLI agents (Codex, Claude)
+- **AI providers**: OpenAI‑compatible, Azure OpenAI, external CLI agents (Codex, Claude)
 - **Embedding providers**: OpenAI‑compatible, Azure OpenAI
 - **Storage**: Postgres (recommended), Redis, in‑memory
 - **Version control**: Git, GitHub (PR support), GitLab/Azure DevOps (planned)
@@ -299,5 +302,6 @@ Each integration is provider-neutral behind defined interfaces, so you can mix a
 - [MCP Server](docs/mcp.md) – connecting AI agents.
 - [AI Jobs & Watcher](docs/ai-jobs.md) – background job contracts and external agents.
 - [API Reference](docs/api.md) – all HTTP endpoints.
+- [Configuration Reference](configuration-reference.md) – comprehensive environment variable reference.
 - [Azure Deployment Notes](infra/azure/README.md) – managed Azure deployment.
 - [README.md](README.md) – local development setup.
