@@ -5,7 +5,7 @@ status: draft
 
 # UI/UX Design Decisions and User Interface Behavior
 
-This document describes the user interface and interaction design of the Markdown Magpie web console (`apps/web`). It covers layout, navigation, keyboard shortcuts, and the rationale behind key design choices.
+This document describes the user interface and interaction design of the Markdown Magpie web console (`apps/web`). It covers layout, navigation, keyboard shortcuts (referenced externally), and the rationale behind key design choices.
 
 ## Overview
 
@@ -31,19 +31,9 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
 
 ## Keyboard Shortcuts
 
-The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. Currently, the following shortcuts are available:
-
-- **Ctrl+Enter** (or **Cmd+Enter** on macOS) – Submit a question on the Ask page.
-- **Escape** – Close any open modal or drawer.
-- **?** – Open the keyboard shortcuts help dialog (if implemented).
-
-For a complete and up-to-date listing of all keyboard shortcuts, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
+The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. For a complete and up-to-date listing, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
 
 Note: The Markdown Magpie pitch deck (`presentation/`) implements its own keyboard navigation (arrow keys, Home, End, O, F) for slide advancement. Those shortcuts do **not** apply to the web console.
-
-### Rationale for Ctrl+Enter over Enter
-
-The Ask page uses a `<textarea>` rather than a single-line `<input>`. Pressing Enter inserts a newline, preventing accidental submission during long-running async operations. Users must use Ctrl+Enter or click the **Ask** button to submit. This design avoids duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
 
 ## Ask Page Interaction Flow
 
