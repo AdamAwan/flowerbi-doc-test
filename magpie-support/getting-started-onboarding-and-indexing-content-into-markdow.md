@@ -29,6 +29,8 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 - (Optional) An embeddings provider if you want hybrid keyword + vector retrieval. See [Embedding Configuration](#embedding-configuration) below.
 - **Watcher (required for all generative work):** Because the API never calls a chat model inline, you must run the watcher process (see [Step 7](#7-start-the-watcher)). Without it, questions will be enqueued but never answered.
 
+> **Authentication note:** Authentication **fails closed** — it is required unless you explicitly set `AUTH_REQUIRED=false`. When auth is enabled (the default), the API refuses to start if Auth0 is not fully configured (a missing or placeholder `AUTH0_AUDIENCE` aborts startup, with an error such as "Auth0 not configured"). For local development, override `AUTH_REQUIRED=false` in your environment or `.env`. See the [Troubleshooting](#troubleshooting) section for related issues.
+
 > **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank. Docker Compose starts Postgres only by default; if you need Redis, add it to your compose file.
 
 If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
@@ -170,6 +172,8 @@ The API will be available at `http://localhost:4000`. Verify with:
 curl localhost:4000/api/health
 ```
 
+> **Troubleshooting startup:** If the API immediately exits after printing "syncing configured git checkouts", a private remote source may need credentials (non-interactive clone fails) or `MAGPIE_CHECKOUT_ROOT` may be non-writable. Ensure `git clone <source-url>` succeeds standalone, and verify the checkout directory is writable.
+
 ## 7. Start the Watcher
 
 The watcher must be running for any generative AI work (answering questions, drafting proposals, publishing, and maintenance jobs). Start it in a separate terminal:
@@ -271,6 +275,8 @@ MAGPIE_DEV_API_PROXY="http://localhost:4000" npm run dev:web
 
 Open `http://localhost:3000` to browse the knowledge base, view questions, and manage proposals.
 
+> **Note:** If you see a blank page with failing chunk requests, the most likely cause is that `MAGPIE_DEV_API_PROXY` was not set before starting the web server. The Next dev server does not read the repo-root `.env`, so the variable must be set in the shell or in `apps/web/.env.local`. Without it, the browser tries same-origin API calls on port 3000 and saturates the connection limit.
+
 ## Switching AI Provider at Runtime
 
 After startup, you can change the active AI provider without restarting the API by calling `POST /api/config`. This is useful for testing different providers quickly. The request accepts either a flat or nested shape:
@@ -326,6 +332,7 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 |---------|--------------|----------|
 | `curl localhost:4000/api/health` fails | API not started or port conflict | Check the terminal running the API; kill other processes on port 4000 |
 | Indexing returns `400 configured_repository_required` | Multiple flows configured, none specified | Provide a valid `flowId` defined in `KNOWLEDGE_FLOWS` |
+| API fails to start with "Auth0 not configured" error | `AUTH_REQUIRED` is true (default) but `AUTH0_AUDIENCE` is missing or invalid | Set `AUTH_REQUIRED=false` for local development, or configure Auth0 variables correctly |
 | `/ask` returns low confidence or `no source material` | No indexed content or embedding incomplete | Verify indexing; wait for background embedding to finish |
 | `/ask` returns `202` but never completes | The watcher is not running. | Start the watcher (step 7) and retry the question. |
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
@@ -335,12 +342,14 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
 | Bootstrap fails with permission error | Override `MAGPIE_CHECKOUT_ROOT` to a writable local path | Use the command from step 6 |
-| “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing | Create the directory and ensure write permissions |
+| “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing; a private remote source requires credentials | Create the directory and ensure write permissions; verify `git clone <source-url>` works standalone |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set |
 | `/api/ask` returns 202 (queued) | This is normal; the answer is being processed | Poll `GET /api/jobs/<id>/wait` until the job completes |
-| Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
+| Index returns “0 documents” | Destination checkout not synced or path wrong; or knowledge config silently dropped | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. Also inspect `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS` — a stray `==` or a flow whose `sourceIds` don't match any source will be silently dropped. |
 | New document not found in search | Index did not run after adding the file | Run index endpoint again. |
 | Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |
+| Knowledge config silently dropped (syncing count 0) | Malformed environment variable (e.g., `KNOWLEDGE_SOURCES==[...]` with a stray `==`) or flow/source id mismatch | Check the exact syntax of `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS`. Ensure each flow's `sourceIds` reference existing source ids and `destinationId` references an existing destination. |
+| Web UI: blank page, all `_next/static/chunks/*.js` fail | `MAGPIE_DEV_API_PROXY` not set; browser saturates same-origin connection limit | Set `MAGPIE_DEV_API_PROXY=http://localhost:4000` in the shell or in `apps/web/.env.local` before starting the web dev server. |
 
 ## Next Steps
 
