@@ -5,7 +5,7 @@ status: draft
 
 # UI/UX Design Decisions and User Interface Behavior
 
-This document describes the user interface and interaction design of the Markdown Magpie web console (`apps/web`). It covers layout, navigation, keyboard shortcuts, and the rationale behind key design choices.
+This document describes the user interface and interaction design of the Markdown Magpie web console (`apps/web`). It covers layout, navigation, keyboard shortcuts (referenced externally), and the rationale behind key design choices.
 
 ## Overview
 
@@ -26,39 +26,32 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
   - **Knowledge**: List and search indexed documents and sections.
   - **Proposals**: Review draft Markdown proposals, change their status, and publish them.
   - **Crunch**: View scheduled tidy runs, trigger new runs, and publish crunch plans.
+- The console also includes a **Schedules** page for managing background job schedules (e.g., patrol cadences) and a **Dataflow** page (`/dataflow`) that visualises the job type fan-out with an interactive diagram.
 - The layout uses responsive CSS; the sidebar collapses on narrow screens.
 
 ## Keyboard Shortcuts
 
-The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. Currently, the following shortcuts are available:
-
-- **Ctrl+Enter** (or **Cmd+Enter** on macOS) – Submit a question on the Ask page.
-- **Escape** – Close any open modal or drawer.
-- **?** – Open the keyboard shortcuts help dialog (if implemented).
-
-For a complete and up-to-date listing of all keyboard shortcuts, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
+The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. For a complete and up-to-date listing, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
 
 Note: The Markdown Magpie pitch deck (`presentation/`) implements its own keyboard navigation (arrow keys, Home, End, O, F) for slide advancement. Those shortcuts do **not** apply to the web console.
 
-### Rationale for Ctrl+Enter over Enter
-
-The Ask page uses a `<textarea>` rather than a single-line `<input>`. Pressing Enter inserts a newline, preventing accidental submission during long-running async operations. Users must use Ctrl+Enter or click the **Ask** button to submit. This design avoids duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
-
 ## Ask Page Interaction Flow
 
-1. The user types a question into a `<textarea>` or `<input>` element.
-2. Clicking **Ask** sends a `POST /api/ask` request.
-3. The API returns HTTP 202 with a job ID.
-4. The UI shows a loading indicator and polls the job status or displays a link to wait.
-5. When the watcher completes the job, the answer (with citations) appears.
+1. The user types a question into a `<textarea>` element.
+2. Optionally, the user selects a **knowledge flow** from a dropdown. The dropdown shows all configured flows, with an **"Auto (let Magpie decide)"** option as the default. When `auto` is selected, the question is routed normally. If a specific flow is chosen, the question is pinned to that flow.
+3. Clicking **Ask** sends a `POST /api/ask` request. The request body includes the `question` and, if a flow other than `auto` was selected, the `flow` parameter.
+4. The API returns HTTP 202 with a job ID and question ID.
+5. The UI shows a loading indicator and polls the job status or displays a link to wait.
+6. When the watcher completes the job, the answer (with citations) appears.
+7. If the answer has a `flowSelectionRequired` field (meaning the router could not decide which flow to use), the UI displays an inline picker listing the available flows. The user can click a flow to re‑ask the same question pinned to that flow. This creates a fresh question/job – the original unanswered question remains as-is.
 
-This async flow is central to the product: all AI work runs in a background watcher, so the UI never blocks. The lack of immediate response on Enter is a tradeoff for reliability and queue management.
+This async flow is central to the product: all AI work runs in a background watcher, so the UI never blocks. The lack of immediate response on Enter is a tradeoff for reliability and queue management. The flow dropdown lets callers control which knowledge area the question is answered from, and the re‑ask mechanism handles the case where the router is uncertain.
 
 ## Design Rationale
 
 - **Simplicity over complexity**: The console is a tool, not a marketing site. Excessive styling or animations would distract from the review tasks.
 - **Async-first**: Since `POST /api/ask` is enqueue-only, the UI must accommodate a wait. The current design avoids hiding this — it shows the job state rather than simulating instant answers.
-- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines). These libraries provide a solid baseline for accessibility and interaction.
+- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines, as well as the Dataflow diagram). These libraries provide a solid baseline for accessibility and interaction.
 - **No inline editing**: To keep the UI predictable, all editing of knowledge content is performed via proposals and published pull requests, not directly in the web console.
 
 ## Future Considerations

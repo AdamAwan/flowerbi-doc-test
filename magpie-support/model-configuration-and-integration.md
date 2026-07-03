@@ -56,12 +56,22 @@ These run an external agent CLI (Codex or Claude Code). The watcher shells out t
 ```env
 AI_PROVIDER=codex
 CODEX_CLI_PATH=codex   # defaults to 'codex' on PATH
+CODEX_CLI_ARGS=exec
+CODEX_CLI_PROMPT_MODE=arg   # or 'stdin'
 
 # or
 
 AI_PROVIDER=claude
 CLAUDE_CLI_PATH=claude # defaults to 'claude' on PATH
+CLAUDE_CLI_ARGS=-p
+CLAUDE_CLI_PROMPT_MODE=arg   # or 'stdin'
 ```
+
+Prompt mode can be:
+- `arg`: append the prompt as the final process argument.
+- `stdin`: send the prompt through standard input.
+
+The agent must return JSON matching the job output schema. The watcher extracts and validates JSON before completing the job.
 
 The watcher advertises `codex` when `CODEX_CLI_PATH` is set, and `claude` when `CLAUDE_CLI_PATH` is set.
 
@@ -131,7 +141,11 @@ Key endpoints for integration:
 | `POST /api/proposals/from-gap` | Create a proposal draft from a gap cluster. |
 | `POST /api/proposals/:id/publish` | Publish a proposal as a git branch and pull request. |
 
-All endpoints accept and return JSON. CORS is open (`access-control-allow-origin: *`).
+All endpoints accept and return JSON. CORS defaults to open (`access-control-allow-origin: *`) but can be restricted by setting `CORS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Every response also includes standard security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Strict-Transport-Security`).
+
+### Job States
+
+Jobs follow the pg-boss lifecycle: `created` → `active` → `completed` (terminal). Additional states include `retry` (recoverable failure), `failed` (exhausted retries), `cancelled` (operator cancellation), and `blocked` (dependency). The standard client pattern is to POST work (returns `202` with a job ID), then poll `GET /api/jobs/:id/wait` until terminal, then read the result via the associated resource endpoint (e.g., `GET /api/questions/:id` for answers). See [AI Job Contract](ai-jobs.md) for detailed job types and payloads.
 
 ### MCP Server
 
@@ -173,6 +187,7 @@ Available capabilities:
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude`) |
+| `github` | `GITHUB_TOKEN` + `MAGPIE_GIT_AUTHOR_NAME` + `MAGPIE_GIT_AUTHOR_EMAIL` |
 | `maintenance` | (none; always available) |
 
 The API only routes a job to a capability offered by a running watcher. A job stays queued until a capable watcher claims it.
@@ -197,3 +212,10 @@ To see which capabilities are ready, check the watcher startup logs:
 - `watcher` – watcher settings (if configured).
 
 This endpoint is useful for troubleshooting and for clients that need to know the current system state.
+
+## See Also
+
+- [Chat Providers](chat-providers.md) — detailed provider configuration
+- [AI Job Contract](ai-jobs.md) — watcher capabilities and job routing
+- [Ingestion](ingestion.md) — embedding configuration and hybrid retrieval
+- [Architecture](architecture.md) — provider strategy overview

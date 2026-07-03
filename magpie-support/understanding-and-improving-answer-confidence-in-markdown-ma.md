@@ -17,11 +17,13 @@ Magpie assigns a confidence score to each generated answer. This score reflects 
 
 Low confidence does not necessarily mean the answer is wrong – it indicates that the system has less assurance due to missing or conflicting evidence.
 
+In some cases, the system may return a confidence of **`unknown`**. This happens when the question router cannot determine which knowledge flow best matches the question and the answer is withheld. The caller is then asked to pick a flow and re‑ask the question. When `unknown` is returned, the answer is a short human‑readable note, no citations are provided, and a `flowSelectionRequired` field lists the available flows for the caller to choose from.
+
 ### How Retrieval Mode Affects Confidence
 
 Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching) and `hybrid` (keyword + pgvector embeddings). Hybrid mode generally yields higher relevance and confidence because it captures semantic meaning beyond exact keyword matches.
 
-When both `KNOWLEDGE_STORE=postgres` and an embeddings provider are configured, retrieval is **hybrid**: a pgvector nearest-neighbour search is fused with an in-memory keyword scorer (heading match +3, content match +1) using Reciprocal Rank Fusion (RRF). Results carry a `[0,1]` relevance score. When either condition is absent, the system falls back to keyword-only scoring. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
+When both `KNOWLEDGE_STORE=postgres` and an embeddings provider are configured, retrieval is **hybrid**: a pgvector nearest-neighbour search is fused with keyword relevance scores (using an in-memory keyword scorer with heading match +3, content match +1, or when the Postgres full-text search backend is available, that is used instead) using Reciprocal Rank Fusion (RRF). Results carry a `[0,1]` relevance score. When either condition is absent, the system falls back to keyword-only scoring. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
 
 Query-time embedding (embedding the user's question) is synchronous in the API request. Section embeddings are generated asynchronously after an index operation.
 
@@ -41,13 +43,14 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
 - **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
 - **Model limitations.** Smaller or less capable models may struggle with complex reasoning, leading to lower confidence even when context is sufficient.
+- **The question could not be routed to a specific knowledge flow.** When using `auto` routing, if the model abstains from choosing a flow, the answer is withheld with confidence `unknown` and a `flowSelectionRequired` field. The caller must re-ask with an explicit `flow` parameter. This is not a failure – it is a deliberate signal that the system cannot determine the correct knowledge area.
 
 ## Checking Current Answer Quality
 
 1. **Submit a question and retrieve the answer.** `POST /api/ask` returns `202` with a job object and a `questionId`; the answer is not in this response. To get the final answer:
    - Poll `GET /api/jobs/<job-id>/wait` — this long-polls until the job is terminal (**`200`** when complete, **`202`** if still running, in which case you re-issue the call).
-   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, or `low`), and citations with relevance scores.
-   Low confidence often means zero or very few citations.
+   - Once the job is complete, fetch `GET /api/questions/<question-id>` to see the answer, confidence (`high`, `medium`, `low`, or `unknown`), and citations with relevance scores. If the answer has confidence `unknown`, look for the `flowSelectionRequired` field to see which flows are available.
+   Low confidence often means zero or very few citations. When `unknown`, no citations are provided.
 2. **Review the knowledge base stats:**
    ```bash
    curl http://localhost:4000/api/knowledge/stats
@@ -70,6 +73,12 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
    This shows questions the system has flagged as low-confidence. Repeated similar gaps indicate a knowledge base gap.
 6. **Monitor watcher logs and confirm the watcher is running:**
    The watcher logs on startup which capabilities are ready. If `Capability provider — ready` is missing, verify the provider credentials. Also confirm a watcher process is running (e.g., `npm run dev:watcher` or equivalent).
+7. **Check deep readiness and build identity:**
+   ```bash
+   curl http://localhost:4000/api/ready
+   curl http://localhost:4000/api/version
+   ```
+   `/api/ready` reports whether Postgres and the job broker are reachable (returns `200` when ready, `503` otherwise). `/api/version` shows the deployed commit's short SHA, subject line, and committer date, which is useful for confirming which build is running.
 
 ## How to Improve Answer Quality
 
@@ -106,7 +115,7 @@ Low confidence often means the knowledge base lacks relevant documents. Use the 
 curl http://localhost:4000/api/gaps/clusters
 ```
 
-Each cluster represents a set of related questions that a single document could resolve. The `gaps-to-pull-requests` reconciler (a scheduled maintenance job) automatically clusters gaps, drafts proposals for uncovered clusters, publishes them as pull requests, and advances proposals as their PRs merge or close. You can also manually draft or generate a proposal:
+Each cluster represents a set of related questions that a single document could resolve. The `gaps-to-pull-requests` reconciler (a scheduled maintenance job) automatically clusters gaps, drafts proposals for uncovered clusters, publishes them as pull requests, and advances proposals as their PRs merge or close. Before clustering, the reconciler prunes resolved gaps (those whose proposals have merged) and dismisses off-topic clusters that are unrelated to the knowledge base, preventing unnecessary proposals. You can also manually draft or generate a proposal:
 
 ```bash
 curl -X POST http://localhost:4000/api/proposals/from-gap \
@@ -149,10 +158,11 @@ If the answer content itself is poor (not just low confidence), check the chat p
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
+| `local-git` | `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` (and git on `PATH`) |
 | `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | `maintenance` | (none; always available) |
 
-  The `github` capability is required for publishing proposals as pull requests. The `maintenance` capability covers scheduled tasks such as gap reconciliation, source sync, and patrol jobs.
+  The `github` capability is required for publishing proposals as pull requests. The `local-git` capability publishes proposals to file:// destinations (branch push only, no PR). The `maintenance` capability covers scheduled tasks such as gap reconciliation, source sync, and patrol jobs.
 
 - Confirm the watcher is running and advertises the required capability. The watcher logs will show `Capability provider — ready` when its credentials match the configured `AI_PROVIDER`. If this line is missing, review the startup logs for errors.
 - You can also check the active capabilities by examining the `ai.runtime.availableProviders` field in the response from `GET /api/config`.
@@ -191,11 +201,11 @@ Markdown Magpie runs several scheduled maintenance jobs that automatically addre
 
 | Task label | Job type | Cadence | What it does |
 |---|---|---|---|
-| Gap drafting | `process_gaps_to_pull_requests` | ~10 min | Clusters new low-confidence answers into gaps, drafts proposals, and publishes them as pull requests.
-| Source sync | `source_change_sync` | ~10 min | Detects upstream source changes and generates update proposals.
-| Snapshot refresh | `refresh_flow_snapshot` | ~5 min | Writes a flow snapshot of gaps, proposals, and PR state for reconciler consumption.
-| Correctness patrol | `correctness_patrol` | hourly | Verifies document claims, corrects errors, deduplicates, and splits overly large files.
-| Editorial patrol | `editorial_patrol` | hourly | Improves completeness of fine-but-thin documents.
+| Gap drafting | `process_gaps_to_pull_requests` | ~10 min | Clusters new low-confidence answers into gaps, prunes resolved gaps, dismisses off-topic clusters, drafts proposals for uncovered clusters, and publishes them as pull requests. |
+| Source sync | `source_change_sync` | ~10 min | Detects upstream source changes and generates update proposals. |
+| Snapshot refresh | `refresh_flow_snapshot` | ~5 min | Writes a flow snapshot of gaps, proposals, and PR state for reconciler consumption. |
+| Correctness patrol | `correctness_patrol` | hourly | Verifies document claims, corrects errors, deduplicates, and splits overly large files. |
+| Editorial patrol | `editorial_patrol` | hourly | Improves completeness of fine-but-thin documents. |
 
 These tasks operate through the same job queue as answer synthesis. The `maintenance` capability (always available) is required for the orchestrator jobs. For details, see the architecture documentation.
 
@@ -205,6 +215,7 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 - Flag answers that require human review.
 - Prioritise which knowledge base sections need enrichment.
 - Compare model versions or prompt configurations.
+- When confidence is `unknown`, it means the system could not route the question – the caller should pick a flow from the returned `flowSelectionRequired` list and re-ask.
 
 ## Summary Table
 
@@ -217,5 +228,6 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with a different provider |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
+| Answer confidence is `unknown` with `flowSelectionRequired` | Router could not determine a flow | Re-ask with an explicit `flow` parameter set to one of the available flow ids |
 
 By following these steps, you can systematically raise answer confidence from low to high and close knowledge gaps over time.

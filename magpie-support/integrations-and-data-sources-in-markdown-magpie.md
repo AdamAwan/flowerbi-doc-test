@@ -46,7 +46,7 @@ Sources with kind `agent` or `internet` are used for drafting proposals but are 
 
 ### Indexing a Data Source
 
-After configuration, index a flow’s destination with the HTTP API:
+After configuration, index a flow's destination with the HTTP API:
 
 ```bash
 curl -s -X POST http://localhost:4000/api/knowledge/repositories/index \

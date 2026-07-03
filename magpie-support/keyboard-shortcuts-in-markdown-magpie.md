@@ -30,7 +30,11 @@ The web console (`@magpie/web`) is built with Next.js and React. The following s
 - **Escape** – Close any open modal or drawer.
 - **?** – Open the keyboard shortcuts help dialog (if implemented).
 
-> **Note:** The web console deliberately keeps custom keyboard shortcuts to a minimum to avoid conflicts with screen reader navigation and browser extensions, and to reduce the learning curve for occasional users. The lack of an Enter-to-submit shortcut is intentional because the input is a multi-line textarea (Enter inserts a newline) and to prevent accidental duplicate submissions during long-running async operations. The shortcuts listed above are the most common ones; additional shortcuts for navigation, proposal review, and other actions may be added in future releases. If you encounter a missing shortcut, please file a feature request. See the [UI/UX Design Decisions](ui-ux-design-decisions-and-user-interface-behavior.md) document for more context on the design rationale.
+> **Note:** The web console deliberately keeps custom keyboard shortcuts to a minimum to avoid conflicts with screen reader navigation and browser extensions, and to reduce the learning curve for occasional users.
+
+### Rationale for Ctrl+Enter over Enter
+
+The Ask page uses a `<textarea>` rather than a single-line `<input>`. Pressing Enter inserts a newline, preventing accidental submission during long-running async operations. Users must use Ctrl+Enter or click the **Ask** button to submit. This design avoids duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
 
 ## MCP Server
 
