@@ -123,7 +123,7 @@ A watcher advertises a **capability** for each provider or service whose credent
 
 | Capability | Required env |
 | --- | --- |
-claude --teleport session_01X6SEed1h4BU1fFod1qp4hE| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
@@ -320,6 +320,15 @@ POST /api/proposals/:id/publish
 ```
 
 Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch and pushes it. For a GitHub destination it then opens a pull request; for a local-git (file://) destination it stops at the pushed branch (no PR to open). The proposal records the branch, commit SHA, and (for GitHub) PR URL. If no host token is available, it degrades gracefully to a pushed branch.
+
+### Verification and Reopening
+
+When a proposal is merged, `verifyGapClosure` re-asks each triggering question to confirm whether the merged content resolves the gap.
+
+- If a re-ask returns a confident answer citing the merged document, the gap is resolved immediately for that question — even if other questions in the same cluster are still open.
+- If a re-ask is still open (low confidence or not citing the merged doc), a **`verification`** gap row is recorded. The summary filed under is determined from the proposal's persisted cluster membership (which carries the per-question association) — so the reopen is attached to the correct gap for that specific question, not the question's oldest open gap or another question's gap. If there is no cluster, the system intersects the question's own still-open gap summaries with the proposal's recorded summaries, falling back to the question text. This ensures the reopen dedups with the existing gap in candidate clustering and avoids misfiling on multi-gap or multi-question scenarios.
+- After two failed verifications for the same question (`CLOSURE_RETRY_CAP`), its gap is marked `needs_attention` and the reconciler stops re-drafting it.
+- The verification gap's note is passed to the drafter as `resubmissionNotes` when the gap is re-drafted, so the model sees why its previous attempt did not close the gap.
 
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
