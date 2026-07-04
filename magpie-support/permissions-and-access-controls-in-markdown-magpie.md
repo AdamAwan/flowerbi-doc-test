@@ -50,9 +50,9 @@ Each MCP tool requires a specific OAuth scope. The token presented by the client
 
 | Tool | Required Scope |
 |------|----------------|
-| `kb.search` | `read:knowledge` |
-| `kb.ask` | `ask:knowledge` |
-| `kb.feedback` | `feedback:questions` |
+| `kb_search` | `read:knowledge` |
+| `kb_ask` | `ask:knowledge` |
+| `kb_feedback` | `feedback:questions` |
 
 If the token lacks the required scope, the server returns a `403 Forbidden` response. Tools that do not require special scopes (e.g., `initialize`, `tools/list`) need only a valid token.
 

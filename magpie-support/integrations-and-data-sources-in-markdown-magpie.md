@@ -155,11 +155,12 @@ The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agent
 - `kb.search`: Search indexed sections by keyword.
 - `kb.flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb.ask`.
 - `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
-- `kb.seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb.flows`.
+- `kb.outline`: Generate a proposed seed outline for a topic so you don't have to write the coverage points by hand. It enqueues an `outline_flow_seed` job (grounded in the flow's existing docs and persona), waits for it, and returns the proposed documents. It **only proposes** — nothing is drafted or seeded; the caller reviews/edits the returned `items` and then passes them to `kb.seed`. Input: `{ "flow": string, "topic": string, "notes"?: string }`. Returns `{ "jobId": string, "items": SeedItem[], "rationale"?: string }`.
+- `kb.seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb.flows`. Tip: use `kb.outline` first to auto-generate the items instead of writing coverage points by hand.
 
 ### Configuration
 
-Common variables: `API_BASE_URL` (default `http://localhost:4000`), `ANSWER_POLL_INTERVAL_MS`, `ANSWER_TIMEOUT_MS`.
+Common variables: `API_BASE_URL` (default `http://localhost:4000`), `ANSWER_POLL_INTERVAL_MS`, `ANSWER_TIMEOUT_MS`, `OUTLINE_POLL_INTERVAL_MS`, `OUTLINE_TIMEOUT_MS`.
 
 HTTP transport requires `MCP_HTTP_PORT` (default `4001`) and optionally `MCP_RESOURCE_URL`. Auth requires `MCP_API_AUTH_TOKEN` when `AUTH_REQUIRED=true`.
 
@@ -194,7 +195,7 @@ Redis is started by Docker Compose but is not required for default setup. It wil
 Authentication **fails closed**: it is required by default unless explicitly disabled via `AUTH_REQUIRED=false`. When enabled, tokens from Auth0 are validated locally using JWKS.
 
 - **API**: Validates `Authorization: Bearer <token>` on endpoint requests.
-- **MCP HTTP**: Acts as an OAuth protected resource; requires per-tool scopes (`read:knowledge`, `ask:knowledge`, `feedback:questions`).
+- **MCP HTTP**: Acts as an OAuth protected resource; requires per-tool scopes (`read:knowledge`, `ask:knowledge`, `feedback:questions`, `manage:jobs`).
 - **MCP stdio**: Presents `MCP_AUTH_TOKEN` to the API.
 
 All authentication is configurable via environment variables. See [`docs/mcp.md`](docs/mcp.md) and the `@magpie/auth` package.
