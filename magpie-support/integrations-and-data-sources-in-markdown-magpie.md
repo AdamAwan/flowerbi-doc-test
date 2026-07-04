@@ -99,7 +99,7 @@ Markdown Magpie syncs git repositories on startup and uses them for proposal bra
 
 ### Pull Request Provider
 
-The `gaps-to-pull-requests` reconciler automatically advances proposals through the lifecycle: draft → ready → branch-pushed → pr-opened → merged → rejected. It polls open PRs, resolves merged proposals’ gaps, and re-indexes the destination upon merge.
+The `gaps-to-pull-requests` reconciler automatically advances proposals through the lifecycle: draft → ready → branch-pushed → pr-opened → merged → rejected. It polls open PRs, and when a PR merges it re-indexes the destination and enqueues a gap-closure verification — the triggering questions are re-asked, and only if the merged document confidently answers them are the gaps resolved. If a PR closes without merging, the proposal is marked rejected.
 
 | Provider | Environment Variables |
 |---|---|
@@ -176,7 +176,6 @@ The watcher can use a local CLI tool as the AI provider, enabling integration wi
 | `openai-compatible` | Same as chat provider but for watcher process; uses `AI_PROVIDER=openai-compatible`. |
 
 > **Note:** The `mock` provider has been removed. Use one of the providers above or see the [Configuration Reference](configuration-reference.md) for the full list.
-
 The agent must return JSON matching the job output schema. The watcher validates and posts results back to the API.
 
 ## Storage Backends

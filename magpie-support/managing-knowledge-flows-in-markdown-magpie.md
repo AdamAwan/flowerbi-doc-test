@@ -298,12 +298,12 @@ curl -X POST http://localhost:4000/api/admin/reset
 ## The Gap Pipeline and Flows
 
 Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
-0. **Prunes resolved gaps** from active clusters: a gap is resolved by `(question, summary)` when its proposal merges, but a prior reshape may have moved that gap into a cluster other than the one the merge freezes. So each tick deactivates the cluster membership of any gap now resolved, and freezes any active cluster left with no still-open members — keeping "active membership" to mean "this gap belongs to this cluster *and* is still open", so a covered gap never re-surfaces as a cluster member or gets re-drafted.
+0. **Prunes resolved gaps** from active clusters: a gap is resolved by `(question, summary)` when its proposal merges and passes gap-closure verification, but a prior reshape may have moved that gap into a cluster other than the one the merge freezes. So each tick deactivates the cluster membership of any gap now resolved, and freezes any active cluster left with no still-open members — keeping "active membership" to mean "this gap belongs to this cluster *and* is still open", so a covered gap never re-surfaces as a cluster member or gets re-drafted.
 1. Groups related gaps into clusters. Optionally reshapes clusters (merge/split) via a provider‑partitioned AI job — if no chat watcher is available, reshape is skipped.
 2. Drafts Markdown proposals that fill those gaps (scoped to a cluster's still-open gaps only).
 3. Publishes them to a Git branch in the flow's destination repository.
 4. Opens a pull request (if the destination is a GitHub remote) and advances the proposal as the PR is merged.
-5. Checks open pull requests: when a PR merges, the associated gaps are resolved and the knowledge base is re-indexed; if a PR closes without merging, the proposal is marked `rejected`.
+5. Checks open pull requests: when a PR merges, the system re-indexes the knowledge base and enqueues a `verify_gap_closure` job to re-ask the triggering questions; the gaps are resolved only if the merged document confidently answers those questions. If verification fails, the gaps stay open for another draft. If a PR closes without merging, the proposal is marked `rejected`.
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
 The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
