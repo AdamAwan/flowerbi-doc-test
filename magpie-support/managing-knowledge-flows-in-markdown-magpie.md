@@ -123,7 +123,7 @@ A watcher advertises a **capability** for each provider or service whose credent
 
 | Capability | Required env |
 | --- | --- |
-claude --teleport session_01X6SEed1h4BU1fFod1qp4hE| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
+| `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` |
 | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT` |
 | `codex` | `CODEX_CLI_PATH` (defaults to `codex` on `PATH`) |
 | `claude` | `CLAUDE_CLI_PATH` (defaults to `claude` on `PATH`) |
@@ -298,12 +298,12 @@ curl -X POST http://localhost:4000/api/admin/reset
 ## The Gap Pipeline and Flows
 
 Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
-0. **Prunes resolved gaps** from active clusters: a gap is resolved by `(question, summary)` when its proposal merges, but a prior reshape may have moved that gap into a cluster other than the one the merge freezes. So each tick deactivates the cluster membership of any gap now resolved, and freezes any active cluster left with no still-open members — keeping "active membership" to mean "this gap belongs to this cluster *and* is still open", so a covered gap never re-surfaces as a cluster member or gets re-drafted.
+0. **Prunes resolved gaps** from active clusters: a gap is resolved by `(question, summary)` when its proposal merges and passes gap-closure verification, but a prior reshape may have moved that gap into a cluster other than the one the merge freezes. So each tick deactivates the cluster membership of any gap now resolved, and freezes any active cluster left with no still-open members — keeping "active membership" to mean "this gap belongs to this cluster *and* is still open", so a covered gap never re-surfaces as a cluster member or gets re-drafted.
 1. Groups related gaps into clusters. Optionally reshapes clusters (merge/split) via a provider‑partitioned AI job — if no chat watcher is available, reshape is skipped.
 2. Drafts Markdown proposals that fill those gaps (scoped to a cluster's still-open gaps only).
 3. Publishes them to a Git branch in the flow's destination repository.
 4. Opens a pull request (if the destination is a GitHub remote) and advances the proposal as the PR is merged.
-5. Checks open pull requests: when a PR merges, the associated gaps are resolved and the knowledge base is re-indexed; if a PR closes without merging, the proposal is marked `rejected`.
+5. Checks open pull requests: when a PR merges, the system re-indexes the knowledge base and enqueues a `verify_gap_closure` job to re-ask the triggering questions; the gaps are resolved only if the merged document confidently answers those questions. If verification fails, the gaps stay open for another draft. If a PR closes without merging, the proposal is marked `rejected`.
 
 Proposals are always relative to the flow's destination. You can review draft proposals via `GET /api/proposals` or the web console's **Proposals** page.
 The reconciler maintains persisted gap clusters, each with an `id`, `title`, `questionIds`, `count`, and optional `rationale`. Clusters are surfaced via `GET /api/gaps/clusters` and provide a fast read without model calls. Clustering happens in the background reconciler, not on request.
@@ -320,6 +320,15 @@ POST /api/proposals/:id/publish
 ```
 
 Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch and pushes it. For a GitHub destination it then opens a pull request; for a local-git (file://) destination it stops at the pushed branch (no PR to open). The proposal records the branch, commit SHA, and (for GitHub) PR URL. If no host token is available, it degrades gracefully to a pushed branch.
+
+### Verification and Reopening
+
+When a proposal is merged, `verifyGapClosure` re-asks each triggering question to confirm whether the merged content resolves the gap.
+
+- If a re-ask returns a confident answer citing the merged document, the gap is resolved immediately for that question — even if other questions in the same cluster are still open.
+- If a re-ask is still open (low confidence or not citing the merged doc), a **`verification`** gap row is recorded. The summary filed under is determined from the proposal's persisted cluster membership (which carries the per-question association) — so the reopen is attached to the correct gap for that specific question, not the question's oldest open gap or another question's gap. If there is no cluster, the system intersects the question's own still-open gap summaries with the proposal's recorded summaries, falling back to the question text. This ensures the reopen dedups with the existing gap in candidate clustering and avoids misfiling on multi-gap or multi-question scenarios.
+- After two failed verifications for the same question (`CLOSURE_RETRY_CAP`), its gap is marked `needs_attention` and the reconciler stops re-drafting it.
+- The verification gap's note is passed to the drafter as `resubmissionNotes` when the gap is re-drafted, so the model sees why its previous attempt did not close the gap.
 
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
