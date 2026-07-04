@@ -42,7 +42,7 @@ Note: The Markdown Magpie pitch deck (`presentation/`) implements its own keyboa
 3. Clicking **Ask** sends a `POST /api/ask` request. The request body includes the `question` and, if a flow other than `auto` was selected, the `flow` parameter.
 4. The API returns HTTP 202 with a job ID and question ID.
 5. The UI shows a loading indicator and polls the job status or displays a link to wait.
-6. When the watcher completes the job, the answer (with citations) appears.
+6. When the watcher completes the job, the answer (with citations) appears as formatted Markdown, rendered using `react-markdown`.
 7. If the answer has a `flowSelectionRequired` field (meaning the router could not decide which flow to use), the UI displays an inline picker listing the available flows. The user can click a flow to re‑ask the same question pinned to that flow. This creates a fresh question/job – the original unanswered question remains as-is.
 
 This async flow is central to the product: all AI work runs in a background watcher, so the UI never blocks. The lack of immediate response on Enter is a tradeoff for reliability and queue management. The flow dropdown lets callers control which knowledge area the question is answered from, and the re‑ask mechanism handles the case where the router is uncertain.
