@@ -131,6 +131,8 @@ A watcher advertises a **capability** for each provider or service whose credent
 | `github` | `GITHUB_TOKEN`, `MAGPIE_GIT_AUTHOR_NAME`, `MAGPIE_GIT_AUTHOR_EMAIL` |
 | `maintenance` | (none) |
 
+For CLI-based providers (`codex` and `claude`), you can optionally choose the model used by the watcher by setting `CODEX_CLI_MODEL` or `CLAUDE_CLI_MODEL`. When set, the watcher appends `--model <value>` to the CLI invocation, overriding the CLI's default model.
+
 Note: A watcher with `github` credentials also satisfies `local-git` (it has git + author identity), so it can publish to both remote and local destinations. `local-git` alone publishes only to `file://` destinations (push, no PR).
 
 ### Client Flow
@@ -400,6 +402,7 @@ curl -s http://localhost:4000/api/config | jq .retrieval
 | Patrol plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
 | Web console shows no flows | Environment variables not set | Verify `KNOWLEDGE_FLOWS` in `.env` and restart the API. |
 | Index returns “0 documents” | Destination checkout not synced or path wrong | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. |
+| `knowledge/stats` empty after configuration | Knowledge config parsers silently dropped malformed entries (e.g., a stray `==` in `KNOWLEDGE_SOURCES`) | Check the syntax of `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS`. Each entry must be valid JSON; flow `sourceIds` must reference existing source IDs or the entire flow is filtered out. |
 | New document not found in search | Index did not run after adding the file | Run index endpoint again. |
 | Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |
 | “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS`. |
