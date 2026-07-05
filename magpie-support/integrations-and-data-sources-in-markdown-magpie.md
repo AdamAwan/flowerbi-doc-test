@@ -62,7 +62,7 @@ Markdown Magpie keeps AI provider logic behind pluggable adapters. You can confi
 
 ### Chat Providers
 
-Set `AI_PROVIDER` and `AI_EXECUTION_MODE` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them. `AI_EXECUTION_MODE` can be `direct` (synchronous, API calls the model) or `queue` (asynchronous via watcher).
+Set `AI_PROVIDER` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them. The system is queue-only — there is no synchronous 'direct' mode; the watcher is required for any AI work.
 
 | Provider | Environment Variables | Notes |
 |---|---|---|
