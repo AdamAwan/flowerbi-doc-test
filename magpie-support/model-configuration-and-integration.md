@@ -58,6 +58,7 @@ AI_PROVIDER=codex
 CODEX_CLI_PATH=codex   # defaults to 'codex' on PATH
 CODEX_CLI_ARGS=exec
 CODEX_CLI_PROMPT_MODE=arg   # or 'stdin'
+CODEX_CLI_MODEL=claude-sonnet-4-20250514  # optional; when set appends `--model <value>`
 
 # or
 
@@ -65,11 +66,14 @@ AI_PROVIDER=claude
 CLAUDE_CLI_PATH=claude # defaults to 'claude' on PATH
 CLAUDE_CLI_ARGS=-p
 CLAUDE_CLI_PROMPT_MODE=arg   # or 'stdin'
+CLAUDE_CLI_MODEL=claude-sonnet-4-20250514  # optional; when set appends `--model <value>`
 ```
 
 Prompt mode can be:
 - `arg`: append the prompt as the final process argument.
 - `stdin`: send the prompt through standard input.
+
+When `CODEX_CLI_MODEL` or `CLAUDE_CLI_MODEL` is set, the watcher appends `--model <value>` to the CLI invocation. If unset, the CLI uses its own default model. On Windows, the command-line length limit (~32 KB) can cause `spawn ENAMETOOLONG` errors when using `arg` mode with large prompts; switching to `stdin` mode avoids this and is effectively required for retrieval-augmented prompts on Windows.
 
 The agent must return JSON matching the job output schema. The watcher extracts and validates JSON before completing the job.
 
