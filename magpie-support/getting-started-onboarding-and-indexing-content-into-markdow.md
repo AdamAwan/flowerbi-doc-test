@@ -185,6 +185,13 @@ AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
 
 > Without the watcher, `POST /api/ask` will return `202` and the question will never be answered. The watcher advertises capabilities based on the provider credentials in its environment; ensure the chosen provider's environment variables are set.
 
+> **Important for maintenance jobs:** Markdown Magpie includes maintenance orchestrators — such as gap‑closure verification (`verify_gap_closure`), patrol tidying, and the gap reconciler — that claim a watcher and then *block* while waiting on follow‑up AI jobs they enqueued. Because a watcher runs **one job at a time**, those follow‑ups can only be picked up by a **second** watcher. With a single watcher the orchestration self‑starves and times out. The console warns when only one watcher is connected. For local development with maintenance features, start a second watcher in another terminal:
+>
+> ```bash
+> AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
+>   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
+> ```
+
 ## 8. Index Your Content
 
 With the API running, trigger indexing of a configured flow:
