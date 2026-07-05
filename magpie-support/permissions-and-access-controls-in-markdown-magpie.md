@@ -25,7 +25,7 @@ Note: The MCP server uses its own tokens (`MCP_AUTH_TOKEN` for stdio, `MCP_API_A
 
 The HTTP API (port 4000) currently delegates permission decisions to the application layer. In the current implementation:
 
-- Most endpoints are **unauthenticated** by default – they accept any request, but some endpoints now enforce scoped authorization. For example, `POST /api/gaps/clusters/:id/proposal` requires the `manage:knowledge` scope. The `POST /api/admin/reset` endpoint remains explicitly documented as unauthenticated and destructive; it must not be exposed in production ([api.md](docs/api.md)).
+- When authentication is enabled (the default), all API endpoints require a valid bearer token. In addition, some endpoints enforce scoped authorization – for example, `POST /api/gaps/clusters/:id/proposal` requires the `manage:knowledge` scope. The `POST /api/admin/reset` endpoint is documented as unauthenticated and destructive; it must not be exposed in production ([api.md](docs/api.md)).
 - The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow” ([architecture.md](docs/architecture.md)), and concrete permission checks have been implemented for several operations (e.g., proposal-from-cluster). More scoped checks are planned.
 - Planned improvements include additional role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware as the auth model evolves.
 
