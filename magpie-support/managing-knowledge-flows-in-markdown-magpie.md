@@ -329,8 +329,11 @@ When a proposal is merged, `verifyGapClosure` re-asks each triggering question t
 
 - If a re-ask returns a confident answer citing the merged document, the gap is resolved immediately for that question — even if other questions in the same cluster are still open.
 - If a re-ask is still open (low confidence or not citing the merged doc), a **`verification`** gap row is recorded. The summary filed under is determined from the proposal's persisted cluster membership (which carries the per-question association) — so the reopen is attached to the correct gap for that specific question, not the question's oldest open gap or another question's gap. If there is no cluster, the system intersects the question's own still-open gap summaries with the proposal's recorded summaries, falling back to the question text. This ensures the reopen dedups with the existing gap in candidate clustering and avoids misfiling on multi-gap or multi-question scenarios.
+- **If a re-ask never completes** (the bounded wait times out — no provider watcher was free, a single-watcher self-starve), `verifyGapClosure` throws a `VerificationIncompleteError`. The endpoint returns `503`, and the `verify_gap_closure` job retries rather than recording a false `still_open` content verdict. This is an infrastructure failure, not a content verdict. It would wrongly reopen a correctly-merged doc if treated as `still_open`. Only re-asks that produce a completed answer trigger the still-open handling.
 - After two failed verifications for the same question (`CLOSURE_RETRY_CAP`), its gap is marked `needs_attention` and the reconciler stops re-drafting it.
 - The verification gap's note is passed to the drafter as `resubmissionNotes` when the gap is re-drafted, so the model sees why its previous attempt did not close the gap.
+
+**Operational requirement:** Because the claiming watcher blocks inside the `/verify-closure` callback while the API bounded-waits on the re-asks, and a watcher runs one job at a time, those re-asks can only be claimed by a **second** watcher. Gap-closure verification (and the patrols) therefore require at least two watchers. The console shows a warning when only one watcher is connected. See [docs/question-logging.md](docs/question-logging.md) for full details.
 
 ## Patrol Maintenance: Scheduled Knowledge Base Tidying
 
