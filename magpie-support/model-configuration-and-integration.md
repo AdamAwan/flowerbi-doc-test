@@ -136,12 +136,15 @@ Key endpoints for integration:
 | `GET /api/questions/:id` | Retrieve the answer and citations. |
 | `GET /api/knowledge/search?q=...` | Search indexed sections (supports hybrid). |
 | `POST /api/knowledge/repositories/index` | Index a configured knowledge flow. |
+| `POST /api/route` | Embedding-similarity flow routing (watcher callback). Returns `{status: "routed"|"abstain"}`. |
 | `GET /api/config` | Current runtime configuration (providers, retrieval mode, etc.). |
 | `POST /api/config` | Switch the active AI provider at runtime. |
 | `POST /api/proposals/from-gap` | Create a proposal draft from a gap cluster. |
 | `POST /api/proposals/:id/publish` | Publish a proposal as a git branch and pull request. |
 
 All endpoints accept and return JSON. CORS defaults to open (`access-control-allow-origin: *`) but can be restricted by setting `CORS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Every response also includes standard security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Strict-Transport-Security`).
+
+The watcher calls `POST /api/route` before the chat router: it embeds the question and flow texts, and if a flow confidently matches, it avoids a chat completion. On abstention, the watcher falls back to `routeQuestionToFlow` (the chat router).
 
 ### Job States
 

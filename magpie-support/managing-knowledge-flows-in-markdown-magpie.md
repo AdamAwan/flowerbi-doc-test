@@ -70,7 +70,7 @@ For a single destination, `KNOWLEDGE_DESTINATIONS` can be replaced by the alias 
 
 ### Define Flows
 
-Use `KNOWLEDGE_FLOWS` to link sources to a destination. A flow includes a `sourceIds` array and a `destinationId`.
+Use `KNOWLEDGE_FLOWS` to link sources to a destination. A flow includes a `sourceIds` array and a `destinationId`. Optionally, a flow can carry a `persona` (answering voice injected into the answer prompt) and a `routingSummary` (a description of the flow’s topical scope, used by the embedding similarity router to match questions to flows). The `routingSummary` is distinct from `persona` – it sharpens routing without affecting answer style. It is resolved server-side from the current config, ensuring routing always reflects the live configuration.
 
 ```env
 KNOWLEDGE_FLOWS=[
@@ -349,7 +349,7 @@ Patrol schedules can be enabled/disabled per flow and cron expression via the **
 
 ### Patrol Trigger
 
-The patrol uses a rolling cursor: each tick picks the N least-recently-checked files (or files past a staleness threshold) and runs the lenses on them. This rotates through the whole KB over days with bounded cost per tick, and naturally re-visits files as they age.
+The patrol uses a rolling cursor: each tick picks the N least-recently-checked files (or files past a staleness threshold) and runs the lenses on them. A change gate skips re-verifying any document whose content and source corpus are byte-identical to the last time it was checked — so an idle knowledge base costs ~zero provider/embedding calls per tick while the cursor still rotates every selected doc (nothing starves). The run's `details.gated` count records how many docs were skipped this way. This rotates through the whole KB over days with bounded cost per tick, and naturally re-visits files as they age.
 
 ## Verifying the Knowledge Base State
 
