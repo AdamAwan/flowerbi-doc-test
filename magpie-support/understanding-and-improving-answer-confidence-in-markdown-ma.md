@@ -25,7 +25,7 @@ Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching
 
 When both `KNOWLEDGE_STORE=postgres` and an embeddings provider are configured, retrieval is **hybrid**: a pgvector nearest-neighbour search is fused with keyword relevance scores (using an in-memory keyword scorer with heading match +3, content match +1, or when the Postgres full-text search backend is available, that is used instead) using Reciprocal Rank Fusion (RRF). Results carry a `[0,1]` relevance score. When either condition is absent, the system falls back to keyword-only scoring. The active retrieval mode is reported by `GET /api/config` under `retrieval.mode` (`hybrid` or `keyword`) along with a plain-language `reason`.
 
-Query-time embedding (embedding the user's question) is synchronous in the API request. Section embeddings are generated asynchronously after an index operation.
+Query-time embedding (embedding the user's question) is synchronous in the API request. Section embeddings are computed inline (within the API process) during indexing, not as a separate asynchronous job.
 
 **Note:** CLI agents such as Codex and Claude cannot produce embeddings. Embeddings must come from an admin-configured OpenAI-compatible or Azure endpoint.
 
