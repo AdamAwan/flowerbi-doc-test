@@ -19,6 +19,19 @@ Low confidence does not necessarily mean the answer is wrong – it indicates th
 
 In some cases, the system may return a confidence of **`unknown`**. This happens when the question router cannot determine which knowledge flow best matches the question and the answer is withheld. The caller is then asked to pick a flow and re‑ask the question. When `unknown` is returned, the answer is a short human‑readable note, no citations are provided, and a `flowSelectionRequired` field lists the available flows for the caller to choose from.
 
+### How Routing Works Now
+
+Flow routing is **two-stage**:
+
+1. **Embedding-similarity router** (cheap, API-side via `POST /api/route`): The watcher calls this endpoint, which embeds the question and each flow’s text (name, optional routing summary, optional persona). It picks the closest flow only when its score clears a floor (`FLOW_ROUTER_MIN_SCORE`, default `0.25`) and beats the runner-up by a margin (`FLOW_ROUTER_MIN_MARGIN`, default `0.05`). If these thresholds are not met, or if no embedding provider is configured, the router **abstains**.
+2. **Chat router** (more expensive, fallback): If the embedding router abstains, the watcher falls back to the existing `routeQuestionToFlow` chat completion. This is the pre-embedding behaviour.
+
+If both routers abstain (the chat router also cannot pick a flow), the answer is withheld with `unknown` confidence and a `flowSelectionRequired` field.
+
+A mis-tuned embedding threshold only makes the router abstain more often — the watcher then does the chat call it would have done anyway. So thresholds are biased toward abstaining and never affect routing correctness.
+
+The answer trace records which router decided (`routing.method`: `embedding` or `chat`).
+
 ### How Retrieval Mode Affects Confidence
 
 Markdown Magpie supports two retrieval modes: `keyword` (in-memory term matching) and `hybrid` (keyword + pgvector embeddings). Hybrid mode generally yields higher relevance and confidence because it captures semantic meaning beyond exact keyword matches.
@@ -43,7 +56,7 @@ Confidence is derived from the relevance scores of the indexed sections retrieve
 - **Insufficient or poorly formatted context.** If the knowledge base lacks relevant information or contains conflicting data, Magpie may produce an answer with low confidence.
 - **Outdated or incomplete knowledge base.** When the source documents used for RAG are not up‑to‑date or missing key topics, the generated answer may rely on weak evidence.
 - **Model limitations.** Smaller or less capable models may struggle with complex reasoning, leading to lower confidence even when context is sufficient.
-- **The question could not be routed to a specific knowledge flow.** When using `auto` routing, if the model abstains from choosing a flow, the answer is withheld with confidence `unknown` and a `flowSelectionRequired` field. The caller must re-ask with an explicit `flow` parameter. This is not a failure – it is a deliberate signal that the system cannot determine the correct knowledge area.
+- **The question could not be routed to a specific knowledge flow.** When using `auto` routing, the system first tries the cheap embedding-similarity router (via `POST /api/route`). If the scores are too close to call (or no embedding provider is configured), it falls back to the chat router. If the chat router also abstains from choosing a flow, the answer is withheld with confidence `unknown` and a `flowSelectionRequired` field. The caller must re-ask with an explicit `flow` parameter. This is not a failure – it is a deliberate signal that the system cannot determine the correct knowledge area.
 
 ## Checking Current Answer Quality
 
@@ -228,6 +241,6 @@ Confidence is a tool for developers and users, not an absolute measure of correc
 | Answers are gibberish or off-topic | AI provider credentials wrong, misconfigured, or watcher not running | Check provider env vars, verify watcher is running, review watcher logs, test with a different provider |
 | Questions return few citations | Poor document structure | Rewrite sections with clear headings and better keywords |
 | Ambiguous questions lead to low confidence | Query too vague | Refine queries to be specific |
-| Answer confidence is `unknown` with `flowSelectionRequired` | Router could not determine a flow | Re-ask with an explicit `flow` parameter set to one of the available flow ids |
+| Answer confidence is `unknown` with `flowSelectionRequired` | Both routers could not determine a flow | Re-ask with an explicit `flow` parameter set to one of the available flow ids |
 
 By following these steps, you can systematically raise answer confidence from low to high and close knowledge gaps over time.

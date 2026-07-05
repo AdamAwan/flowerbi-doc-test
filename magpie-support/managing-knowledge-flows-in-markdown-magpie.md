@@ -70,7 +70,7 @@ For a single destination, `KNOWLEDGE_DESTINATIONS` can be replaced by the alias 
 
 ### Define Flows
 
-Use `KNOWLEDGE_FLOWS` to link sources to a destination. A flow includes a `sourceIds` array and a `destinationId`.
+Use `KNOWLEDGE_FLOWS` to link sources to a destination. A flow includes a `sourceIds` array and a `destinationId`. Optionally, a flow can carry a `persona` (answering voice injected into the answer prompt) and a `routingSummary` (a description of the flow’s topical scope, used by the embedding similarity router to match questions to flows). The `routingSummary` is distinct from `persona` – it sharpens routing without affecting answer style. It is resolved server-side from the current config, ensuring routing always reflects the live configuration.
 
 ```env
 KNOWLEDGE_FLOWS=[
