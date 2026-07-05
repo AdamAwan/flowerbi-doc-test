@@ -52,6 +52,7 @@ This async flow is central to the product: all AI work runs in a background watc
 - **Simplicity over complexity**: The console is a tool, not a marketing site. Excessive styling or animations would distract from the review tasks.
 - **Async-first**: Since `POST /api/ask` is enqueue-only, the UI must accommodate a wait. The current design avoids hiding this — it shows the job state rather than simulating instant answers.
 - **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines, as well as the Dataflow diagram). These libraries provide a solid baseline for accessibility and interaction.
+- **Styling architecture**: The UI is styled entirely with Emotion CSS-in-JS using a typed design-token theme (`src/theme/`) and a library of primitives (`src/components/ui/` — Button, Badge, Chip, Surface, Field, Tabs, Stack/Row). There are no `.css` files: every component reads from the theme via `p => p.theme.*`. This prevents style drift and makes theme changes predictable.
 - **No inline editing**: To keep the UI predictable, all editing of knowledge content is performed via proposals and published pull requests, not directly in the web console.
 
 ## Future Considerations
