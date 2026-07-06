@@ -92,13 +92,14 @@ Note: `EMBEDDING_PROVIDER` is an informational variable only — it is surfaced 
 
 ## Job Queue Configuration
 
-All AI work is enqueued to a pg‑boss queue in Postgres. The API never calls a model inline; a separate watcher claims and completes jobs. The following variables control job queue behaviour:
+All AI chat/generative work is enqueued to a pg‑boss queue in Postgres. The API never calls a chat or generative model inline; a separate watcher claims and completes jobs. The one exception is **embedding computation**, which runs in the API process (it holds an embedding provider) for indexing and query-time retrieval. The following variables control job queue and watcher behaviour:
 
 | Variable | Description | Default |
 |---|---|---|
 | `JOB_WAIT_TIMEOUT_MS` | Maximum time (ms) for a single long‑poll wait call on a job. | 25000 |
 | `JOB_WAIT_POLL_MS` | Server‑side poll interval (ms) when waiting for a job to complete. | 250 |
 | `JOB_SCHEDULE_TIMEZONE` | Timezone for scheduled jobs (e.g., crunch). | `UTC` |
+| `WATCHER_POLL_INTERVAL_MS` | Watcher poll interval (ms) when checking for new jobs from the API. Also the error backoff interval. | 2000 |
 
 Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
 
@@ -130,7 +131,7 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 ## Authentication (Auth0 / Entra ID)
 
-Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. Note that an unset, blank, or misspelled value leaves authentication **on**, so a misconfigured deployment remains locked down rather than silently exposed. When enabled, configure one of the following:
+Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. An unset, blank, or misspelled value leaves authentication **on**, so a misconfigured deployment remains locked down rather than silently exposed. When auth is required (`AUTH_REQUIRED` is not `false`), the API also refuses to start unless Auth0 is configured — a missing or placeholder `AUTH0_AUDIENCE` aborts startup. When enabled, configure one of the following:
 
 **Auth0:**
 ```env
@@ -156,6 +157,8 @@ Both are required when auth is enabled (the default, unless `AUTH_REQUIRED=false
 At least one of the following must be set when auth is enabled (the default) and the watcher is active:
 - Both `WATCHER_API_CLIENT_ID` and `WATCHER_API_CLIENT_SECRET` (preferred), or
 - `API_TOKEN` (legacy fallback).
+
+For local development, override `AUTH_REQUIRED=false` and clear the watcher M2M credentials (`WATCHER_API_CLIENT_ID=`, `WATCHER_API_CLIENT_SECRET=`) so the watcher communicates with the API without auth headers.
 
 ## CORS Configuration
 
