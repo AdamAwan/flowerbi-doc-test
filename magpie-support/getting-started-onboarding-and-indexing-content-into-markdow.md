@@ -224,6 +224,13 @@ For CLI-based providers (`codex` and `claude`), you can optionally choose the mo
 
 Note: A watcher with `github` credentials also satisfies `local-git` (it has git + author identity), so it can publish to both remote and local destinations. `local-git` alone publishes only to `file://` destinations (push, no PR).
 
+> **Important for maintenance jobs:** Markdown Magpie includes maintenance orchestrators — such as gap‑closure verification (`verify_gap_closure`), patrol tidying, and the gap reconciler — that claim a watcher and then *block* while waiting on follow‑up AI jobs they enqueued. Because a watcher runs **one job at a time**, those follow‑ups can only be picked up by a **second** watcher. With a single watcher the orchestration self‑starves and times out. The console warns when only one watcher is connected. For local development with maintenance features, start a second watcher in another terminal:
+>
+> ```bash
+> AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
+>   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
+> ```
+
 ### Client Flow
 
 The standard request/await pattern for any job-backed endpoint:
@@ -506,7 +513,7 @@ POST /api/proposals/:id/status
 POST /api/proposals/:id/publish
 ```
 
-Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch and pushes it. For a GitHub destination it then opens a pull request; for a local-git (file://) destination it stops at the pushed branch (no PR to open). The proposal records the branch, commit SHA, and (for GitHub) PR URL. If no host token is available, it degrades gracefully to a pushed branch.
+Publication is enqueue-only. The watcher commits the Markdown to a `magpie/proposal-*` branch and pushes it. For a GitHub destination it then opens a pull request; for a local-git (file://) destination it stops at the pushed branch (no PR to open) and the human reviewer uses the console's **Accept** (merge) or **Bin** (reject) action — Accept merges the branch into the default branch, resolves gaps, and re-indexes; Bin marks the proposal rejected, freezes its gap cluster, and deletes the review branch. The proposal records the branch, commit SHA, and (for GitHub) PR URL. If no host token is available, it degrades gracefully to a pushed branch.
 
 ### Verification and Reopening
 
