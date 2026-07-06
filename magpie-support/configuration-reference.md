@@ -20,8 +20,8 @@ Configure the flow pipeline via these environment variables:
 | `KNOWLEDGE_DESTINATIONS` | JSON array of destination objects (writable Git repos). | `[{"id":"my-dest","name":"My KB","url":"...","subpath":"docs"}]` |
 | `KNOWLEDGE_FLOWS` | JSON array of flow objects linking source IDs to a destination ID. | `[{"id":"myflow","sourceIds":["my-repo"],"destinationId":"my-dest"}]` |
 | `MAGPIE_CHECKOUT_ROOT` | Local directory for cloned repositories. | `.magpie/checkouts` |
-| `KNOWLEDGE_STORE` | Backend for indexed knowledge. Either `postgres` (recommended) or `memory`. | `postgres` |
-| `DATABASE_URL` | Postgres connection string (required when `KNOWLEDGE_STORE=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
+| `STORAGE_BACKEND` | Backend for indexed knowledge (see also the Storage Backend section). Either `postgres` (recommended) or `memory`. | `postgres` |
+| `DATABASE_URL` | Postgres connection string (required when `STORAGE_BACKEND=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
 
 For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
 
@@ -59,12 +59,12 @@ KNOWLEDGE_FLOWS=[{"id":"docs","name":"Product Docs","sourceIds":["docs"],"destin
 
 Set `AI_PROVIDER` to one of the following and configure the corresponding variables:
 
-| Provider | `AI_PROVIDER` value | Required Variables | Notes |
-|---|---|---|---|
-| OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | |
-| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | |
-| Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` | `CODEX_CLI_PATH` defaults to `codex` on `PATH` if unset. |
-| Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` | `CLAUDE_CLI_PATH` defaults to `claude` on `PATH` if unset. |
+| Provider | `AI_PROVIDER` value | Required Variables | Optional Variables | Notes |
+|---|---|---|---|---|
+| OpenAI‑compatible | `openai-compatible` | `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL` | – | |
+| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` | – | |
+| Codex (CLI) | `codex` | `CODEX_CLI_PATH`, `CODEX_CLI_ARGS`, `CODEX_CLI_PROMPT_MODE` | `CODEX_CLI_MODEL` | `CODEX_CLI_PATH` defaults to `codex` on `PATH` if unset. Set `CODEX_CLI_PROMPT_MODE=stdin` on Windows to avoid `ENAMETOOLONG` errors. `CODEX_CLI_MODEL` appends `--model <value>` to the CLI call; if unset the CLI's default model is used. |
+| Claude (CLI) | `claude` | `CLAUDE_CLI_PATH`, `CLAUDE_CLI_ARGS`, `CLAUDE_CLI_PROMPT_MODE` | `CLAUDE_CLI_MODEL` | `CLAUDE_CLI_PATH` defaults to `claude` on `PATH` if unset. Set `CLAUDE_CLI_PROMPT_MODE=stdin` on Windows to avoid `ENAMETOOLONG` errors. `CLAUDE_CLI_MODEL` appends `--model <value>` to the CLI call; if unset the CLI's default model is used. |
 
 **Note:** The `mock` provider has been removed. `AI_PROVIDER` must now name a supported provider from the table above.
 
@@ -86,7 +86,7 @@ AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 ```
 
-Embeddings require `KNOWLEDGE_STORE=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
+Embeddings require `STORAGE_BACKEND=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
 
 Note: `EMBEDDING_PROVIDER` is an informational variable only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting embedding credentials is what activates them.
 
@@ -130,7 +130,7 @@ For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only 
 
 ## Authentication (Auth0 / Entra ID)
 
-Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. When enabled, configure one of the following:
+Authentication **fails closed**: it is required by default unless explicitly disabled with `AUTH_REQUIRED=false`. Note that an unset, blank, or misspelled value leaves authentication **on**, so a misconfigured deployment remains locked down rather than silently exposed. When enabled, configure one of the following:
 
 **Auth0:**
 ```env

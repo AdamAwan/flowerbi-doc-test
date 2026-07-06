@@ -53,7 +53,9 @@ Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable –
 
 ## How Seeding Integrates with Indexing and Embedding
 
-When you submit a seed, the API enqueues `draft_seed_document` AI jobs for each item. These jobs draft Markdown content grounded in the flow's existing source material. On completion, the API creates a **clusterless proposal** – a proposal that does not originate from a gap cluster. The proposal then follows the standard review and publication flow:
+When you submit a seed, the API enqueues `draft_seed_document` AI jobs for each item. These jobs draft Markdown content grounded in the flow's existing source material. All seed drafting jobs are processed asynchronously by the **watcher** process, which handles all generative AI work in the system. The API never performs chat or content generation inline — it enqueues the job and returns immediately. This means seed drafting will only complete if a watcher with the appropriate provider capability (matching `AI_PROVIDER`) is running and connected to the API. If no watcher is available, the jobs remain queued indefinitely. This pattern is consistent across all generative operations in Markdown Magpie.
+
+On completion, the API creates a **clusterless proposal** – a proposal that does not originate from a gap cluster. The proposal then follows the standard review and publication flow:
 
 1. The proposal is stored with status `draft`.
 2. A human reviews it in the console (or via API) and changes its status to `ready`.
