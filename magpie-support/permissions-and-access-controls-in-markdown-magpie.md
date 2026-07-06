@@ -21,6 +21,10 @@ The background watcher process (`@magpie/watcher`) communicates with the API to 
 
 Note: The MCP server uses its own tokens (`MCP_AUTH_TOKEN` for stdio, `MCP_API_AUTH_TOKEN` for HTTP) to authenticate to the API; these are separate from the watcher credentials. In earlier versions, the watcher used the MCP server's tokens for its own authentication; this is now deprecated in favour of dedicated watcher credentials.
 
+#### Watcher Security Boundary
+
+As an additional security control, the watcher process has no direct access to the database. It communicates with the API exclusively over HTTP and shares only the managed-checkout volume (for git operations). This means all data access is mediated by the API, which enforces authentication and authorization. This design limits the blast radius of a compromised watcher and ensures that the API remains the single policy enforcement point.
+
 ## API‑Level Access Control
 
 The HTTP API (port 4000) currently delegates permission decisions to the application layer. In the current implementation:
@@ -138,6 +142,7 @@ CORS_ALLOWED_ORIGINS=https://your-web-console.example.com
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication and scoped authorization on several endpoints, including the proposal-from-cluster endpoint (`manage:knowledge`), in addition to the MCP layer.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
 - The background watcher authenticates to the API with its own client-credentials (`WATCHER_API_CLIENT_ID` + `WATCHER_API_CLIENT_SECRET`) or the legacy `API_TOKEN` when authentication is enabled.
+- The watcher has no direct database access; all data access is mediated by the API, reinforcing the security boundary.
 - CORS defaults to open; set `CORS_ALLOWED_ORIGINS` in production. Standard security headers are applied to all API, MCP, and web responses.
 
 ---
