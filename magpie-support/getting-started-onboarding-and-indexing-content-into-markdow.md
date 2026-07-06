@@ -80,7 +80,7 @@ Without the correct credentials, the watcher will not advertise the capability a
 
 ## 3. Start Dependencies (Postgres + optional Redis)
 
-The Docker Compose file is designed so that a bare `docker compose up` starts only the backing services (Postgres and Redis) without the application containers. Redis is not required for core functionality—the queue uses Postgres via pg-boss. If you prefer not to run Redis, you can comment out the Redis service in `docker-compose.yml` or simply ignore it.
+The Docker Compose file is designed so that a bare `docker compose up` starts only Postgres (the backing service) without the application containers. Redis is not required for core functionality—the queue uses Postgres via pg-boss. If you prefer not to run Redis, you can comment out the Redis service in `docker-compose.yml` or simply ignore it.
 
 ```bash
 docker compose up -d
