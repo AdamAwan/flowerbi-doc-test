@@ -103,6 +103,8 @@ All AI chat/generative work is enqueued to a pg‑boss queue in Postgres. The AP
 
 Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
 
+**Note on watcher scaling:** Maintenance orchestrator jobs (e.g., gap-closure verification, patrols) require **at least two running watchers**. A maintenance job claims one watcher and then blocks inside an API callback while it waits on follow-up AI jobs. A single watcher cannot claim those follow-ups, so the work self-starves and times out. Run two watcher processes in production to avoid this. The console warns when only one watcher is connected.
+
 ## Storage Backend Configuration
 
 | Backend | Variable | Value |
@@ -173,6 +175,7 @@ The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subpro
 ```env
 MCP_TRANSPORT=stdio  # or streamable-http
 MCP_PORT=4001        # for HTTP transport
+API_BASE_URL=http://localhost:4000  # base URL of the Markdown Magpie API
 ```
 
 When HTTP transport is used, per‑tool OAuth scopes are enforced:
