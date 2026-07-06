@@ -20,13 +20,14 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
 
 ## Navigation and Layout
 
-- **Top-level pages** are accessed via a sidebar or header: **Ask**, **Knowledge**, **Proposals**, **Crunch**.
+- **Top-level pages** are accessed via a sidebar or header: **Ask**, **Knowledge**, **Proposals**, **Crunch**, **Insights**.
 - Each page corresponds to a key workflow:
   - **Ask**: Submit a question and view the answer after the async watcher processes it.
   - **Knowledge**: List and search indexed documents and sections.
   - **Proposals**: Review draft Markdown proposals, change their status, and publish them.
   - **Crunch**: View scheduled tidy runs, trigger new runs, and publish crunch plans.
-- The console also includes a **Schedules** page for managing background job schedules (e.g., patrol cadences) and a **Dataflow** page (`/dataflow`) that visualises the job type fan-out with an interactive diagram.
+  - **Insights**: Visualise pipeline performance trends (backlog, throughput, latency, verification success, freshness, patrol impact) with interactive charts.
+- The console also includes an **Insights** page for pipeline performance charts, a **Schedules** page for managing background job schedules (e.g., patrol cadences), and a **Dataflow** page (`/dataflow`) that visualises the job type fan-out with an interactive diagram.
 - The layout uses responsive CSS; the sidebar collapses on narrow screens.
 
 ## Keyboard Shortcuts
