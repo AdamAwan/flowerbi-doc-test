@@ -19,7 +19,7 @@ Configure the flow pipeline via these environment variables:
 | `KNOWLEDGE_SOURCES` | JSON array of source objects. Each source must have at least `id`, `name`, and `kind`. | `[{"id":"my-repo","kind":"git","url":"...","subpath":"docs"}]` |
 | `KNOWLEDGE_DESTINATIONS` | JSON array of destination objects (writable Git repos). | `[{"id":"my-dest","name":"My KB","url":"...","subpath":"docs"}]` |
 | `KNOWLEDGE_FLOWS` | JSON array of flow objects linking source IDs to a destination ID. | `[{"id":"myflow","sourceIds":["my-repo"],"destinationId":"my-dest"}]` |
-| `MAGPIE_CHECKOUT_ROOT` | Local directory for cloned repositories. | `.magpie/checkouts` |
+| `MAGPIE_CHECKOUT_ROOT` | Local directory for cloned repositories. Production default is `/data/checkouts`; override locally (e.g., `.magpie/checkouts`). | `.magpie/checkouts` |
 | `STORAGE_BACKEND` | Backend for indexed knowledge (see also the Storage Backend section). Either `postgres` (recommended) or `memory`. | `postgres` |
 | `DATABASE_URL` | Postgres connection string (required when `STORAGE_BACKEND=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
 
@@ -190,9 +190,9 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 
 | Target | Key Variables |
 |---|---|
-| Docker Compose | Use `docker compose up`; application containers require `profile=app`. |
+| Docker Compose | Use `docker compose up`; application containers require `profile=app`. Set `MAGPIE_CHECKOUT_ROOT` to a writable path (production default `/data/checkouts` is used in the Docker image; override locally). |
 | Azure Container Apps | See `infra/azure/README.md`. |
-| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. For web development, set `MAGPIE_DEV_API_PROXY=http://localhost:4000` so the web dev server proxies API requests. |
+| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. For web development, set `MAGPIE_DEV_API_PROXY=http://localhost:4000` so the web dev server proxies API requests. Override `MAGPIE_CHECKOUT_ROOT` to a writable local path (e.g., `.magpie/checkouts`) to avoid the production default. |
 
 The default production shape is Docker Compose.
 
