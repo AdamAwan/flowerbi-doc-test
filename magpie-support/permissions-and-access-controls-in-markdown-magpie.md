@@ -9,10 +9,9 @@ Markdown Magpie authentication **fails closed**: it is required unless explicitl
 
 ## Authentication Architecture
 
-Authentication is provided by the `@magpie/auth` package, which validates JSON Web Tokens (JWTs) against an external OpenID Connect provider. The default and recommended identity provider is Auth0 (or Microsoft Entra ID for Azure deployments).
+Authentication is provided by the `@magpie/auth` package, which validates JSON Web Tokens (JWTs) against an external OpenID Connect provider. The default and recommended identity provider is Auth0.
 
 - **Auth0 configuration** – Authentication is required by default (fail-closed). When enabled, the API and MCP server require a valid bearer token issued by the configured Auth0 tenant. To disable authentication, set `AUTH_REQUIRED=false`. The token must carry the expected audience (`AUTH0_AUDIENCE`, default `https://markdown-magpie.local/api`). When authentication is enabled, the API additionally refuses to start if `AUTH0_AUDIENCE` is missing or a placeholder — a missing or placeholder value aborts startup, ensuring misconfiguration fails early.
-- **Microsoft Entra ID** – For Azure deployments, Entra ID can be used as the identity provider (see `infra/azure/README.md`).
 - **Local development** – With `AUTH_REQUIRED=false` (explicitly disabling auth), no token is required. All endpoints are open. When running the watcher locally, ensure that its machine-to-machine credentials (`WATCHER_API_CLIENT_ID`, `WATCHER_API_CLIENT_SECRET`) and the legacy `API_TOKEN` are unset or cleared so it does not send an Authorization header to the locally-running API. (The watcher only sends an Authorization header when its M2M credentials or the legacy token are configured.)
 
 ### Watcher Authentication
@@ -55,8 +54,11 @@ Each MCP tool requires a specific OAuth scope. The token presented by the client
 | Tool | Required Scope |
 |------|----------------|
 | `kb_search` | `read:knowledge` |
+| `kb_flows` | `read:knowledge` |
 | `kb_ask` | `ask:knowledge` |
 | `kb_feedback` | `feedback:questions` |
+| `kb_outline` | `manage:jobs` |
+| `kb_seed` | `manage:jobs` |
 
 If the token lacks the required scope, the server returns a `403 Forbidden` response. Tools that do not require special scopes (e.g., `initialize`, `tools/list`) need only a valid token.
 
@@ -66,7 +68,7 @@ The web administration console (port 3000) also validates Auth0-issued tokens wh
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_AUTH0_ISSUER` | Auth0 issuer URL for the browser-side SDK. |
+| `NEXT_PUBLIC_AUTH0_DOMAIN` | Auth0 domain (e.g. `your-tenant.auth0.com`) for the browser-side SDK. |
 | `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Auth0 client ID for the web application. |
 | `NEXT_PUBLIC_AUTH0_AUDIENCE` | Expected API audience (must match `AUTH0_AUDIENCE`). |
 
@@ -93,7 +95,7 @@ All authentication variables are shared between the API and MCP server via the `
 ## Future Directions
 
 - **Role‑based API access** – The architecture document states that “the API owns permissions … and review workflow.” Future iterations will add role‑based checks (e.g., admin, editor, viewer) to API endpoints such as proposal creation, gap management, and system configuration.
-- **Team and organization support** – Integration with Microsoft Entra ID or Auth0 organizations will allow scoping permissions to specific teams, ensuring that only authorised team members can modify the knowledge base.
+- **Team and organization support** – Integration with Auth0 organizations will allow scoping permissions to specific teams, ensuring that only authorised team members can modify the knowledge base.
 - **Audit logging** – All authentication decisions and permission checks will be logged for compliance and troubleshooting.
 
 ## Configuration Examples
@@ -137,7 +139,7 @@ CORS_ALLOWED_ORIGINS=https://your-web-console.example.com
 ## Summary
 
 - By default, authentication is required (fail-closed). Set `AUTH_REQUIRED=false` to run without authentication for local development.
-- In production, ensure Auth0 (or Entra ID) is configured and the required tokens are set.
+- In production, ensure Auth0 is configured and the required tokens are set.
 - The MCP HTTP server provides granular per‑tool scopes for agent access.
 - The API is evolving toward full role‑based access control; the current codebase enforces authentication and scoped authorization on several endpoints, including the proposal-from-cluster endpoint (`manage:knowledge`), in addition to the MCP layer.
 - The web console also validates Auth0 tokens when authentication is enabled, using its own set of environment variables.
