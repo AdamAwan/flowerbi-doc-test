@@ -26,15 +26,9 @@ The URL hash tracks the current slide (e.g. `index.html#8`) for deep linking.
 
 The web console (`@magpie/web`) is built with Next.js and React. The following shortcuts are available:
 
-- **Ctrl+Enter** (or **Cmd+Enter** on macOS) in the Ask page textarea – Submit the question.
 - **Escape** – Close any open modal or drawer.
-- **?** – Open the keyboard shortcuts help dialog (if implemented).
 
 > **Note:** The web console deliberately keeps custom keyboard shortcuts to a minimum to avoid conflicts with screen reader navigation and browser extensions, and to reduce the learning curve for occasional users.
-
-### Rationale for Ctrl+Enter over Enter
-
-The Ask page uses a `<textarea>` rather than a single-line `<input>`. Pressing Enter inserts a newline, preventing accidental submission during long-running async operations. Users must use Ctrl+Enter or click the **Ask** button to submit. This design avoids duplicate job submissions when the Enter key is pressed while the system is still processing a previous request.
 
 ## MCP Server
 
@@ -49,4 +43,4 @@ Improvements planned include:
 
 ## Contributing
 
-Shortcuts are implemented in the web app components. To add or modify shortcuts, see the web app source at `apps/web/src/`. Contributions are welcome via pull requests.
+Pitch deck shortcuts are implemented in `scripts/build-deck.mjs`; Escape-to-close-modal is handled in the modal components under `apps/web/src/components/`. Contributions are welcome via pull requests.
