@@ -8,6 +8,8 @@ review_cycle_days: 90
 
 # Configuration Reference
 
+Requires Node.js ≥22.13 (see root `package.json`).
+
 This document describes all environment variables and configuration options for Markdown Magpie. It is the single source of truth for settings related to AI providers, embeddings, storage, knowledge sources/destinations, authentication, and deployment.
 
 ## Knowledge Sources, Destinations, and Flows
@@ -24,6 +26,8 @@ Configure the flow pipeline via these environment variables:
 | `DATABASE_URL` | Postgres connection string (required when `STORAGE_BACKEND=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
 
 For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
+
+> **Caution:** Configuration parsing is deliberately defensive — malformed entries are silently dropped. Ensure JSON is valid, that flow `sourceIds` reference existing source IDs, and that `destinationId` references a configured destination. A flow whose `sourceIds` do not all match a configured source is filtered out entirely, so the `flowId` will not be available for indexing or questions.
 
 ### Supported Source Kinds
 
