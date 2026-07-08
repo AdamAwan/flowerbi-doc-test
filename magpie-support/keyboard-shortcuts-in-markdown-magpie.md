@@ -34,13 +34,6 @@ The web console (`@magpie/web`) is built with Next.js and React. The following s
 
 The MCP server does not expose keyboard shortcuts; all interaction is programmatic via tools.
 
-## Future Shortcuts
-
-Improvements planned include:
-
-- **Submit on Enter** (single-line mode) – Currently the Ask textarea requires Ctrl+Enter to submit. A configuration option to enable Enter-as-submit in single-line mode is under consideration.
-- **Global search** (`Ctrl+K`) – For quick access to knowledge base search.
-
 ## Contributing
 
 Pitch deck shortcuts are implemented in `scripts/build-deck.mjs`; Escape-to-close-modal is handled in the modal components under `apps/web/src/components/`. Contributions are welcome via pull requests.
