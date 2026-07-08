@@ -34,7 +34,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 
 > **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank. Docker Compose starts Postgres only by default; if you need Redis, add it to your compose file.
 
-If you haven’t started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo’s main README.
+If you haven't started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo's main README.
 
 ## 1. Clone and Install
 
@@ -110,7 +110,7 @@ A knowledge flow is a named pipeline that links one or more sources to a destina
 
 | Concept | Description |
 |---------|-------------|
-| **Source** | A read‑only location of raw Markdown (e.g., your project’s code repository, an internet URL, or an agent knowledge folder). |
+| **Source** | A read‑only location of raw Markdown (e.g., your project's code repository, an internet URL, or an agent knowledge folder). |
 | **Destination** | The repository where reviewed, final Markdown lives. This is what Magpie indexes for retrieval and answering. |
 | **Flow** | A named connection between sources and a destination. Magpie monitors sources for changes and updates the destination accordingly. |
 
@@ -347,7 +347,101 @@ Open `http://localhost:3000` to browse the knowledge base, view questions, and m
 
 > **Note:** If you see a blank page with failing chunk requests, the most likely cause is that `MAGPIE_DEV_API_PROXY` was not set before starting the web server. The Next dev server does not read the repo-root `.env`, so the variable must be set in the shell or in `apps/web/.env.local`. Without it, the browser tries same-origin API calls on port 3000 and saturates the connection limit.
 
-## Switching AI Provider at Runtime
+## 12. (Optional) Run the MCP Server
+
+The MCP server (`@magpie/mcp`) lets AI agents and MCP-aware clients query the knowledge base through tools such as `kb_ask`, `kb_search`, `kb_feedback`, `kb_flows`, `kb_outline`, and `kb_seed`. It is a thin client over the HTTP API — it holds no state and proxies every request to the API at `API_BASE_URL`. The API and a watcher must be running before `kb_ask` can answer questions.
+
+### stdio Transport (local subprocess)
+
+Build and run the stdio server:
+
+```bash
+npm run build -w @magpie/mcp
+API_BASE_URL=http://localhost:4000 node apps/mcp/dist/main.js
+```
+
+The server communicates over stdin/stdout using JSON-RPC messages (one JSON line per message, no embedded newlines). Logging goes to stderr. A project-scoped `.mcp.json` at the repository root registers the server with Claude Code automatically.
+
+### Streamable HTTP Transport (network)
+
+Run the HTTP server on a configurable port (default `4001`):
+
+```bash
+API_BASE_URL=http://localhost:4000 npm run start:http -w @magpie/mcp
+```
+
+The MCP endpoint is at `http://localhost:4001/mcp`. The server also exposes a health check at `http://localhost:4001/health`. The port is set by `MCP_HTTP_PORT` (default `4001`) and the bind host by `MCP_HTTP_HOST` (default `127.0.0.1`; set to `0.0.0.0` to expose on all interfaces).
+
+### Available Tools
+
+| Tool | Description | Required scope |
+|------|-------------|----------------|
+| `kb_search` | Search indexed Markdown sections by keyword. | `read:knowledge` |
+| `kb_ask` | Ask a question and get a cited answer from the knowledge base. | `ask:knowledge` |
+| `kb_feedback` | Flag an answer as helpful, unhelpful, or a knowledge gap. | `feedback:questions` |
+| `kb_flows` | List the knowledge flows a question can be routed to. | `read:knowledge` |
+| `kb_outline` | Propose a seed outline (list of documents to author) for a topic, grounded in a flow's existing docs. | `manage:jobs` |
+| `kb_seed` | Seed a flow with initial content: draft documents straight into proposals, skipping the gap pipeline. | `manage:jobs` |
+
+For authentication details, per-tool scopes, and client setup instructions (Claude Code, Claude Desktop, VS Code, Cursor, Continue), see [docs/mcp.md](../docs/mcp.md).
+
+When `AUTH_REQUIRED=true`, the HTTP transport acts as an OAuth protected resource, validating inbound tokens against Auth0. The stdio transport presents `MCP_AUTH_TOKEN` to the API. Both fail fast at startup if required credentials are missing.
+
+## 13. Bootstrap Content with Flow Seeding
+
+The fastest way to populate a new knowledge base is **flow seeding**: you submit a list of documents to author (each a title plus the points it should cover), and the system drafts each one straight into a proposal → pull request, bypassing the gap-clustering pipeline entirely. This is the recommended on-ramp for a new flow or a new area of knowledge (e.g. a new feature).
+
+### Direct API Call
+
+```bash
+curl -X POST http://localhost:4000/api/flows/my-flow/seed \
+  -H 'content-type: application/json' \
+  -d '{
+    "items": [
+      {
+        "title": "Billing overview",
+        "coverage": ["what billing is", "the available plans"]
+      },
+      {
+        "coverage": ["refund policy", "how to request a refund"]
+      }
+    ]
+  }'
+```
+
+Each item's `coverage` field (the points the document must cover) is required (≥1). `title` and `targetPath` are optional. An optional `questions` array supplies motivating prompts for context. The endpoint requires the `manage:jobs` scope and `manage` capability on the target flow.
+
+The API enqueues one `draft_seed_document` job per item and returns `{ "ok": true, "jobIds": [...] }`. Drafting is source-grounded: the executing agent explores the flow's source repositories (git/local/internet/agent) to find supporting material. Coverage points the sources do not support are omitted from the authored document and recorded on the proposal's rationale. On completion, each document is created as a clusterless proposal that goes through the same reconcile gate as gap drafts (folds into overlapping open PRs, or self-publishes as its own PR), so seeding still ends at a reviewable pull request.
+
+### Using the Web Console
+
+The console's **Seed / add an area** page drives the full workflow: pick a flow, enter a topic, generate an outline, edit the proposed documents, then seed. See the Seed section in the sidebar at `http://localhost:3000/seed`.
+
+### Using the MCP Tools
+
+The MCP server exposes `kb_outline` (proposes documents for a topic, grounded in the flow's existing docs) and `kb_seed` (drafts the items straight into proposals). The typical two-step flow is:
+
+1. `kb_outline` with `{ "flow": "my-flow", "topic": "Refund handling" }` — returns proposed `SeedItem[]`.
+2. Review and edit the items, then call `kb_seed` with `{ "flow": "my-flow", "items": [...] }`.
+
+This bypasses the need to write coverage points by hand.
+
+### Generating the Outline
+
+If you do not have a precise list of items, you can let the system propose one:
+
+```bash
+curl -X POST http://localhost:4000/api/flows/my-flow/outline \
+  -H 'content-type: application/json' \
+  -d '{
+    "topic": "Refund handling",
+    "notes": "focus on partial refunds"
+  }'
+```
+
+The API grounds the outline job in the flow's existing documents (retrieved inline for the topic) so the model proposes items that fit the current structure and do not restate what is already covered. The job returns `{ items: SeedItem[], rationale }`. It **only proposes** — nothing is drafted or seeded. Review and edit the returned items, then submit them via the seed endpoint above or the `kb_seed` MCP tool.
+
+## 14. Switching AI Provider at Runtime
 
 After startup, you can change the active AI provider without restarting the API by calling `POST /api/config`. This is useful for testing different providers quickly. The request accepts either a flat or nested shape:
 
@@ -365,7 +459,7 @@ curl -s -X POST http://localhost:4000/api/config \
 
 The API returns the updated configuration (same shape as `GET /api/config`). The provider must be one of: `openai-compatible`, `azure-openai`, `codex`, `claude`. It will fail with `400` if the provider is not configured (i.e., its environment variables are missing).
 
-## Embedding Configuration (Optional)
+## 15. Embedding Configuration (Optional)
 
 For hybrid retrieval (keyword + vector), configure an embeddings provider **independently** of the chat provider. The following sets work:
 
@@ -391,15 +485,15 @@ Hybrid mode activates automatically when `KNOWLEDGE_STORE=postgres` **and** a co
 
 Note: `EMBEDDING_PROVIDER` is informational only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting `OPENAI_COMPATIBLE_EMBEDDING_MODEL` is what enables OpenAI-compatible embeddings.
 
-## Managing Documents in the Knowledge Base
+## 16. Managing Documents in the Knowledge Base
 
 The knowledge base is the indexed corpus used to answer questions. Documents are sourced from configured flows and stored in a Git-backed destination repository.
 
 ### Adding Documents
 
-New documents are added by **including them in the destination repository** and then re-indexing. Magpie does not provide a separate “upload” endpoint; instead, you:
+New documents are added by **including them in the destination repository** and then re-indexing. Magpie does not provide a separate "upload" endpoint; instead, you:
 
-1. Add your Markdown file(s) to the destination repository (either directly via Git or through a proposal/pull request).
+1. Add your Markdown file(s) to the destination repository (either directly via Git, through a proposal/pull request, or by flow seeding).
 2. Run the index command to make Magpie aware of them.
 
 #### Adding via Git (manual)
@@ -432,6 +526,10 @@ When the gap detector finds missing knowledge, the recommended workflow is:
 4. Once `ready`, publish it: the system commits to a branch and (if the destination is a GitHub remote) opens a pull request.
 5. After review and merge, the new document is part of the destination.
 
+#### Adding via Flow Seeding (recommended for new areas)
+
+To bootstrap a new area of knowledge — or an entire new flow — use the seed endpoint as described in [Section 13](#13-bootstrap-content-with-flow-seeding). Each item is drafted into a proposal → pull request, skipping the gap pipeline entirely.
+
 ### Removing Documents
 
 To remove a document, you must **delete the file from the destination repository** and then re-index.
@@ -463,7 +561,7 @@ Batch deletions work the same way — remove several files, commit, push, and re
 
 If a document has become obsolete or inconsistent, the scheduled **correctness patrol** can detect duplicates, contradictions, and overgrown documents. When it finds a problem, it creates a proposal with a multi-file changeset (dedupe, split, or correct) that can be reviewed and published as a pull request.
 
-## Keeping Flows Updated
+## 17. Keeping Flows Updated
 
 ### Source Change Sync
 
@@ -487,11 +585,11 @@ For demos or clean slates, the `/api/admin/reset` endpoint clears all indexed da
 curl -X POST http://localhost:4000/api/admin/reset
 ```
 
-**Warning:** This is destructive and unauthenticated; never expose it in production.
+**Warning:** This is destructive. It requires the `manage:admin` scope and the `admin` capability (a super-admin role); never expose it without these restrictions in production.
 
-## The Gap Pipeline and Proposals
+## 18. The Gap Pipeline and Proposals
 
-Every question asked via `/api/ask` or the MCP tool `kb.ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
+Every question asked via `/api/ask` or the MCP tool `kb_ask` is logged. Low-confidence answers and user-flagged gaps are clustered per flow. The `gaps-to-pull-requests` reconciler then:
 0. **Prunes resolved gaps** from active clusters: a gap is resolved by `(question, summary)` when its proposal merges and passes gap-closure verification, but a prior reshape may have moved that gap into a cluster other than the one the merge freezes. So each tick deactivates the cluster membership of any gap now resolved, and freezes any active cluster left with no still-open members — keeping "active membership" to mean "this gap belongs to this cluster *and* is still open", so a covered gap never re-surfaces as a cluster member or gets re-drafted.
 1. Groups related gaps into clusters. Optionally reshapes clusters (merge/split) via a provider‑partitioned AI job — if no chat watcher is available, reshape is skipped.
 2. Drafts Markdown proposals that fill those gaps (scoped to a cluster's still-open gaps only).
@@ -524,7 +622,7 @@ When a proposal is merged, `verifyGapClosure` re-asks each triggering question t
 - After two failed verifications for the same question (`CLOSURE_RETRY_CAP`), its gap is marked `needs_attention` and the reconciler stops re-drafting it.
 - The verification gap's note is passed to the drafter as `resubmissionNotes` when the gap is re-drafted, so the model sees why its previous attempt did not close the gap.
 
-## Patrol Maintenance: Scheduled Knowledge Base Tidying
+## 19. Patrol Maintenance: Scheduled Knowledge Base Tidying
 
 Rather than a single whole-knowledge-base crunch, Magpie now runs several **patrol** lenses on a rolling cursor. Each scheduled tick selects the least-recently-checked documents in a flow and runs one or more lenses over them:
 
@@ -576,19 +674,19 @@ The patrol uses a rolling cursor: each tick picks the N least-recently-checked f
 | Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars, see the table in step 2 |
 | `401` on API calls | Authentication enabled but no credentials | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
-| “local_path_not_allowed” error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
+| "local_path_not_allowed" error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
 | Bootstrap fails with permission error | Override `MAGPIE_CHECKOUT_ROOT` to a writable local path | Use the command from step 6 |
-| “Failed to sync configured git repositories” | `MAGPIE_CHECKOUT_ROOT` is not writable or missing; a private remote source requires credentials | Create the directory and ensure write permissions; verify `git clone <source-url>` works standalone |
+| "Failed to sync configured git repositories" | `MAGPIE_CHECKOUT_ROOT` is not writable or missing; a private remote source requires credentials | Create the directory and ensure write permissions; verify `git clone <source-url>` works standalone |
 | Hybrid retrieval not active | Embedding credentials incomplete or `KNOWLEDGE_STORE` not set | Check that `KNOWLEDGE_STORE=postgres` and a complete set of embedding credentials are set |
 | `/api/ask` returns 202 (queued) | This is normal; the answer is being processed | Poll `GET /api/jobs/<id>/wait` until the job completes |
-| Index returns “0 documents” | Destination checkout not synced or path wrong; or knowledge config silently dropped | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. Also inspect `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS` — a stray `==` or a flow whose `sourceIds` don't match any source will be silently dropped. |
+| Index returns "0 documents" | Destination checkout not synced or path wrong; or knowledge config silently dropped | Verify `MAGPIE_CHECKOUT_ROOT` and that the destination repo is cloned. Check API startup logs for sync errors. Also inspect `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS` — a stray `==` or a flow whose `sourceIds` don't match any source will be silently dropped. |
 | New document not found in search | Index did not run after adding the file | Run index endpoint again. |
 | Re-index takes a long time | Embedding pass for many new sections | Wait; embedding runs in background and is idempotent. |
 | Knowledge config silently dropped (syncing count 0) | Malformed environment variable (e.g., `KNOWLEDGE_SOURCES==[...]` with a stray `==`) or flow/source id mismatch | Check the exact syntax of `KNOWLEDGE_SOURCES`, `KNOWLEDGE_DESTINATIONS`, and `KNOWLEDGE_FLOWS`. Ensure each flow's `sourceIds` reference existing source ids and `destinationId` references an existing destination. |
 | Web UI: blank page, all `_next/static/chunks/*.js` fail | `MAGPIE_DEV_API_PROXY` not set; browser saturates same-origin connection limit | Set `MAGPIE_DEV_API_PROXY=http://localhost:4000` in the shell or in `apps/web/.env.local` before starting the web dev server. |
 | Proposals not appearing as PRs | No git host token configured | Set `GITHUB_TOKEN` or equivalent and ensure the `refresh_flow_snapshot` scheduler is running. |
-| Patrol plan says “no changes needed” | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
+| Patrol plan says "no changes needed" | Destination already well‑structured | Configure smaller interval or manually trigger a full analysis. |
 | Web console shows no flows | Environment variables not set | Verify `KNOWLEDGE_FLOWS` in `.env` and restart the API. |
 
 ## Next Steps
@@ -601,6 +699,7 @@ The patrol uses a rolling cursor: each tick picks the N least-recently-checked f
 - Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
 - Understand the [architecture and job model](architecture.md).
 - Try the [full Docker Compose stack](README.md#docker-compose) for a self-contained demo.
+- Connect AI agents via the [MCP server](docs/mcp.md) for direct knowledge base queries.
 
 ---
 
@@ -610,3 +709,5 @@ The patrol uses a rolling cursor: each tick picks the N least-recently-checked f
 - [HTTP API Reference](managing-knowledge-flows-in-markdown-magpie.md#api-endpoints) – all API endpoints for indexing and searching.
 - [Architecture](managing-knowledge-flows-in-markdown-magpie.md) – high-level system design and provider strategy.
 - [Configuration Reference](configuration-reference.md) – comprehensive documentation of all environment variables.
+- [MCP Server Reference](docs/mcp.md) – MCP transports, tools, auth, and client setup.
+- [AI Job Contract](docs/ai-jobs.md) – queued AI jobs, seeding, and the watcher model.
