@@ -533,7 +533,7 @@ Rather than a single whole-knowledge-base crunch, Magpie now runs several **patr
   - **Correct** – automatically rewrites flagged documents.
   - **Dedupe** – finds near-duplicates and reconciles pairs.
   - **Split** – breaks overgrown documents into focused pieces.
-- **Editorial patrol** – expand thin docs. Rolls its own cursor across this flow's knowledge-base documents, sending the least-recently-improved ones to the model with the flow's source material so fine-but-thin documents grow source-backed coverage. Separate from the Correctness patrol: it proposes editorial expansion, not correctness or structural fixes.
+- **Editorial patrol** – expand thin docs. Rolls its own cursor across this flow's knowledge-base documents, sending the least-recently-improved ones to an agent that explores the flow's source repositories so fine-but-thin documents grow source-backed coverage. Separate from the Correctness patrol: it proposes editorial expansion, not correctness or structural fixes.
 
 Each patrol produces a `MaintenanceRun` record surfaced in the Activity page. Proposals created by patrols are clusterless and go through the same reconcile gate (fold into existing open PRs on overlap, publish as own PR otherwise). The correctness patrol is conservative (only acts when something is demonstrably wrong), while the editorial patrol is proactive (grows fine-but-thin docs).
 
