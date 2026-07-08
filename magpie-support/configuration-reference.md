@@ -174,12 +174,16 @@ For local development, override `AUTH_REQUIRED=false` and clear the watcher M2M 
 
 ## MCP Server Configuration
 
-The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess) and `streamable-http` (persistent HTTP on port 4001). Configure via:
+The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess, entrypoint `apps/mcp/src/main.ts`) and `streamable-http` (persistent HTTP, entrypoint `apps/mcp/src/http.ts`). Configure via:
 
 ```env
-MCP_TRANSPORT=stdio  # or streamable-http
-MCP_PORT=4001        # for HTTP transport
 API_BASE_URL=http://localhost:4000  # base URL of the Markdown Magpie API
+```
+
+For the HTTP transport, additionally:
+
+```env
+MCP_HTTP_PORT=4001  # port for HTTP transport (default 4001)
 ```
 
 When HTTP transport is used, per‑tool OAuth scopes are enforced:
