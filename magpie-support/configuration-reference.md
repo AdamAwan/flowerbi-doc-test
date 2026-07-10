@@ -104,6 +104,8 @@ All AI chat/generative work is enqueued to a pg‑boss queue in Postgres. The AP
 | `JOB_WAIT_POLL_MS` | Server‑side poll interval (ms) when waiting for a job to complete. | 250 |
 | `JOB_SCHEDULE_TIMEZONE` | Timezone for scheduled jobs (e.g., crunch). | `UTC` |
 | `WATCHER_POLL_INTERVAL_MS` | Watcher poll interval (ms) when checking for new jobs from the API. Also the error backoff interval. | 2000 |
+| `AI_MAX_INFLIGHT_JOBS` | Global ceiling on concurrent in‑flight AI jobs. New AI work is rejected at enqueue with 429 once this many are already running. | 20 |
+| `AI_INTERACTIVE_RESERVED_JOBS` | In‑flight slots reserved for interactive AI jobs (e.g., answers, flow outlines). An interactive enqueue is rejected only when both the reserve is full and the global ceiling is reached. Set to 0 to disable the reserve; values above the ceiling are clamped to the ceiling. | 5 |
 
 Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
 
@@ -177,13 +179,9 @@ For local development, override `AUTH_REQUIRED=false` and clear the watcher M2M 
 The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess, entrypoint `apps/mcp/src/main.ts`) and `streamable-http` (persistent HTTP, entrypoint `apps/mcp/src/http.ts`). Configure via:
 
 ```env
+MCP_TRANSPORT=stdio  # or streamable-http
+MCP_PORT=4001        # port for HTTP transport (default 4001)
 API_BASE_URL=http://localhost:4000  # base URL of the Markdown Magpie API
-```
-
-For the HTTP transport, additionally:
-
-```env
-MCP_HTTP_PORT=4001  # port for HTTP transport (default 4001)
 ```
 
 When HTTP transport is used, per‑tool OAuth scopes are enforced:
