@@ -62,7 +62,7 @@ Markdown Magpie keeps AI provider logic behind pluggable adapters. You can confi
 
 ### Chat Providers
 
-Set `AI_PROVIDER` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them.
+Set `AI_PROVIDER` to control how answers are synthesised. The API enqueues all generative work as jobs on a pg-boss queue; a separate watcher process claims and completes them. The system is queue-only — there is no synchronous 'direct' mode; the watcher is required for any AI work.
 
 | Provider | Environment Variables | Notes |
 |---|---|---|
@@ -155,8 +155,8 @@ The MCP server (`apps/mcp`) is a thin proxy over the HTTP API, allowing AI agent
 - `kb.search`: Search indexed sections by keyword.
 - `kb.flows`: List the knowledge flows a question can be routed to. Returns the ids and names of configured flows. Use the returned ids as the `flow` argument to `kb.ask`.
 - `kb.feedback`: Record feedback (`helpful`/`unhelpful`/`knowledge_gap`) on a past answer.
-- `kb.outline`: Generate a proposed seed outline for a topic so you don't have to write the coverage points by hand. It enqueues an `outline_flow_seed` job (grounded in the flow's existing docs and persona), waits for it, and returns the proposed documents. It **only proposes** — nothing is drafted or seeded; the caller reviews/edits the returned `items` and then passes them to `kb.seed`. Input: `{ "flow": string, "topic": string, "notes"?: string }`. Returns `{ "jobId": string, "items": SeedItem[], "rationale"?: string }`.
-- `kb.seed`: Seed a flow with initial content: submit a list of documents to author, each a title plus the points it should cover. Each is drafted straight into a proposal → pull request, skipping the gap-clustering pipeline. Use for a brand-new flow or to add a new area of knowledge (e.g. a new feature) to an existing one. Discover flow ids with `kb.flows`. Tip: use `kb.outline` first to auto-generate the items instead of writing coverage points by hand.
+- `kb.outline`: Propose a seed plan for a flow by exploring its source repositories — **no topic needed**. It enqueues the source-grounded `outline_flow_seed` job, waits for it, then returns the **persisted plan** its completion created. It **only proposes** — nothing is drafted; the plan waits behind the review gate. Approve it with `kb_seed`, or review/edit it in the console. Input: `{ "flow": string, "notes"?: string }` (`notes` is an optional steer for this run). Returns `{ "planId": string, "charter"?: string, "charterProposed": boolean, "persona"?: string, "personaProposed": boolean, "items": SeedItem[], "rationale"?: string }`, where each `SeedItem` is `{ title?, targetPath?, coverage: string[], questions?: string[] }`. The `*Proposed` flags record that the charter/persona came from the model because the flow config lacked one — copy the value into `KNOWLEDGE_FLOWS` to make it permanent.
+- `kb.seed`: Approve a seed plan (from `kb_outline` or the console): drafts one document per approved item straight into the proposal → pull-request pipeline, carrying the plan's run-scoped charter/persona. Edit or partially dismiss items in the console first if needed. Input: `{ "plan": string }` — the plan id (from `kb_outline`'s `planId`, or the console). Returns `{ "planId": string, "jobIds": string[] }` — one enqueued `draft_seed_document` job per approved item. See [ai-jobs.md](ai-jobs.md#seeding-a-flow) for the full seeding flow.
 
 ### Configuration
 

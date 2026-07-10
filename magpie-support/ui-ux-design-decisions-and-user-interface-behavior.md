@@ -14,19 +14,26 @@ The web console is a Next.js application (port 3000) that provides a review and 
 - Ask questions against the indexed knowledge base.
 - Browse indexed documents and sections.
 - Review and manage gap clusters and proposals.
-- Configure and trigger scheduled maintenance (Crunch).
+- Monitor background job status and history.
+- Configure and manage scheduled background tasks (e.g., patrol cadences, source-change sync).
 
 The UI is deliberately sparse and utilitarian, focusing on clarity and fast task completion over rich visual presentation.
 
 ## Navigation and Layout
 
-- **Top-level pages** are accessed via a sidebar or header: **Ask**, **Knowledge**, **Proposals**, **Crunch**.
+- **Top-level pages** are accessed via a sidebar or header: **Ask**, **Knowledge**, **Gaps**, **Seed**, **Proposals**, **Source Map**, **Jobs**, **Activity**, **Insights**, **Schedules**, **Dataflow**.
 - Each page corresponds to a key workflow:
   - **Ask**: Submit a question and view the answer after the async watcher processes it.
   - **Knowledge**: List and search indexed documents and sections.
+  - **Gaps**: View and manage gap clusters detected from low-confidence answers.
+  - **Seed**: Propose a seed plan for a flow by exploring its sources, then review and approve it.
   - **Proposals**: Review draft Markdown proposals, change their status, and publish them.
-  - **Crunch**: View scheduled tidy runs, trigger new runs, and publish crunch plans.
-- The console also includes a **Schedules** page for managing background job schedules (e.g., patrol cadences) and a **Dataflow** page (`/dataflow`) that visualises the job type fan-out with an interactive diagram.
+  - **Source Map**: Display navigation hints contributed by agents as they explore source repositories for source-grounded drafting, verification, and improvement jobs.
+  - **Jobs**: Monitor background job status and history.
+  - **Activity**: View audit log of system events (maintenance runs, proposal actions, etc.).
+  - **Insights**: Visualise pipeline performance trends (backlog, throughput, latency, verification success, freshness, patrol impact) with interactive charts.
+  - **Schedules**: Configure and manage background job schedules (e.g., patrol cadences, source-change sync).
+  - **Dataflow** (`/dataflow`): Visualise the job type fan-out with an interactive diagram.
 - The layout uses responsive CSS; the sidebar collapses on narrow screens.
 
 ## Keyboard Shortcuts
@@ -51,7 +58,8 @@ This async flow is central to the product: all AI work runs in a background watc
 
 - **Simplicity over complexity**: The console is a tool, not a marketing site. Excessive styling or animations would distract from the review tasks.
 - **Async-first**: Since `POST /api/ask` is enqueue-only, the UI must accommodate a wait. The current design avoids hiding this — it shows the job state rather than simulating instant answers.
-- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch and Proposal pipelines, as well as the Dataflow diagram). These libraries provide a solid baseline for accessibility and interaction.
+- **Radix UI primitives**: The project uses Radix UI for accessible components (tooltips, etc.) and React Flow for visualising knowledge flows (Crunch (scheduled maintenance) and Proposal pipelines, as well as the Dataflow diagram). These libraries provide a solid baseline for accessibility and interaction.
+- **Styling architecture**: The UI is styled entirely with Emotion CSS-in-JS using a typed design-token theme (`src/theme/`) and a library of primitives (`src/components/ui/` — Button, Badge, Chip, Surface, Field, Tabs, Stack/Row). There are no `.css` files: every component reads from the theme via `p => p.theme.*`. This prevents style drift and makes theme changes predictable.
 - **No inline editing**: To keep the UI predictable, all editing of knowledge content is performed via proposals and published pull requests, not directly in the web console.
 
 ## Future Considerations
