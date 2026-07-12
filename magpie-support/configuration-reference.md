@@ -92,7 +92,7 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 
 Embeddings require `STORAGE_BACKEND=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
 
-Note: `EMBEDDING_PROVIDER` is an informational variable only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting embedding credentials is what activates them.
+Note: The embedding provider is automatically detected from the presence of credential variables — setting `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (plus base URL and API key) or the Azure OpenAI endpoint/key/deployment trio activates embeddings. There is no separate `EMBEDDING_PROVIDER` environment variable; the detected provider name is reported in `/api/config`.
 
 ## Job Queue Configuration
 
@@ -107,7 +107,7 @@ All AI chat/generative work is enqueued to a pg‑boss queue in Postgres. The AP
 | `AI_MAX_INFLIGHT_JOBS` | Global ceiling on concurrent in‑flight AI jobs. New AI work is rejected at enqueue with 429 once this many are already running. | 20 |
 | `AI_INTERACTIVE_RESERVED_JOBS` | In‑flight slots reserved for interactive AI jobs (e.g., answers, flow outlines). An interactive enqueue is rejected only when both the reserve is full and the global ceiling is reached. Set to 0 to disable the reserve; values above the ceiling are clamped to the ceiling. | 5 |
 
-The job queue uses pg‑boss connected directly to Postgres via `DATABASE_URL`. There is no Redis or `QUEUE_URL` configuration path.
+The job queue uses pg‑boss backed by Postgres via `DATABASE_URL`. There is no separate queue URL or Redis support.
 
 **Note on watcher scaling:** Maintenance orchestrator jobs (e.g., gap-closure verification, patrols) require **at least two running watchers**. A maintenance job claims one watcher and then blocks inside an API callback while it waits on follow-up AI jobs. A single watcher cannot claim those follow-ups, so the work self-starves and times out. Run two watcher processes in production to avoid this. The console warns when only one watcher is connected.
 
