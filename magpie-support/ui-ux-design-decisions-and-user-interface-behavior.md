@@ -38,7 +38,7 @@ The UI is deliberately sparse and utilitarian, focusing on clarity and fast task
 
 ## Keyboard Shortcuts
 
-The web console supports a limited set of custom keyboard shortcuts to streamline common tasks. For a complete and up-to-date listing, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
+The web console implements Escape-to-close on detail modals: `MaintenanceRunDetailsModal` in the Activity panel, and `DocumentModal` and `PersonaModal` in the Knowledge panel. There are no Ctrl+key, navigation, or other global shortcuts. For a complete and up-to-date listing of any additional custom keyboard shortcuts, see [Keyboard Shortcuts in Markdown Magpie](keyboard-shortcuts-in-markdown-magpie.md).
 
 Note: The Markdown Magpie pitch deck (`presentation/`) implements its own keyboard navigation (arrow keys, Home, End, O, F) for slide advancement. Those shortcuts do **not** apply to the web console.
 
