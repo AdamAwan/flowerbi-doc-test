@@ -31,7 +31,16 @@ Content-Type: application/json
 }
 ```
 
-Each *item* has an optional `title` and a required `coverage` array of points the document should cover. When a title is omitted, one is generated automatically.
+Each *item* has an optional `title`, an optional `targetPath` (an explicit destination-relative path such as `billing/overview.md`), a required `coverage` array of points the document should cover, and an optional `questions` array of motivating questions/prompts that give the drafter context. When a title is omitted, one is generated automatically. When a `targetPath` is given, the drafted document is written to that exact path rather than deriving one from the title.
+
+The schema for each item is:
+
+| Field | Type | Required | Purpose |
+|-------|------|----------|---------|
+| `title` | string | no | Document title; derived if absent |
+| `targetPath` | string | no | Explicit destination-relative path |
+| `coverage` | string[] | yes (≥1) | Points the document must cover |
+| `questions` | string[] | no | Motivating questions for the drafter |
 
 To **generate an outline** first (instead of writing items by hand), use:
 
@@ -51,18 +60,25 @@ You can then inspect the proposed outline and use it as the basis for your own s
 
 Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable – that variable is used to define the git or local paths that the flow indexes for ongoing operations. Seeds are not passed as inline content; instead, the job carries references to the flow's configured sources (`SourceDescriptor[]`), which the watcher resolves to traversable workspaces and lets the agent explore directly. Both the seed and outline endpoints require the `manage:jobs` scope and `manage` on the target flow; they return the enqueued job ids.
 
+### MCP Tools
+
+The same seeding operations are available through the Markdown Magpie MCP server as the `kb_seed` and `kb_outline` tools. `kb_outline` (`apps/mcp/src/main.ts`) enqueues an `outline_flow_seed` job, waits for it to complete, and returns the proposed items plus rationale — the caller reviews, edits, and then passes the items to `kb_seed`. `kb_seed` is a thin wrapper over `POST /api/flows/:flowId/seed` that accepts a `flow` and `items` and returns the enqueued job ids. Both require the `manage:jobs` scope. The tool descriptions advise using `kb_outline` first to auto-generate items, then calling `kb_seed` with the reviewed list — keeping a human (or calling agent) in the loop between the two steps.
+
 ## How Seeding Integrates with Indexing and Embedding
 
 When you submit a seed, the API enqueues `draft_seed_document` AI jobs for each item. These jobs draft Markdown content grounded in the flow's source repositories, which the executing agent explores directly. All seed drafting jobs are processed asynchronously by the **watcher** process, which handles all generative AI work in the system. The API never performs chat or content generation inline — it enqueues the job and returns immediately. This means seed drafting will only complete if a watcher with the appropriate provider capability (matching `AI_PROVIDER`) is running and connected to the API. If no watcher is available, the jobs remain queued indefinitely. This pattern is consistent across all generative operations in Markdown Magpie.
 
-On completion, the API creates a **clusterless proposal** – a proposal that does not originate from a gap cluster. The proposal then follows the standard review and publication flow:
+On completion, the API creates a **clusterless proposal** – a proposal that does not originate from a gap cluster. The proposal carries the flow's id first-class so the reconcile gate and per-flow outbox treat it as same-flow. It then passes through the shared reconcile gate:
 
 1. The proposal is stored with status `draft`.
-2. A human reviews it in the console (or via API) and changes its status to `ready`.
-3. The human triggers publication (`POST /api/proposals/:id/publish`), which pushes the document to a new branch (and optionally opens a pull request for git-backed destinations).
-4. After the pull request is merged (or the branch is accepted), the new content becomes part of the indexed knowledge base.
+2. The reconcile gate (`reconcileSeedProposal` in `apps/api/src/scheduling/fold.ts`) checks whether an open proposal in the same flow already targets the same path. If so, the seed document is folded into that open proposal (a `fold_markdown_proposal` AI job merges the rival content into the survivor). Otherwise, or if the only overlap is an approved/non-touchable PR, the seed proposal self-publishes as its own PR.
+3. A human reviews it in the console (or via API) and changes its status to `ready`.
+4. The human triggers publication (`POST /api/proposals/:id/publish`), which pushes the document to a new branch (and optionally opens a pull request for git-backed destinations).
+5. After the pull request is merged (or the branch is accepted), the new content becomes part of the indexed knowledge base.
 
 **Seeds are not ingested as high-priority knowledge automatically.** They must pass through the same human gate as any other proposal. The Markdown Magpie source documentation states: “seeding still ends at a reviewable pull request — the same human gate as everything else.” Only after merge and a subsequent re-index will the seed content be searchable and citable in answers.
+
+**What happens when sources do not support a coverage point.** During drafting, the agent explores the flow's source repositories to substantiate every coverage point. If a point genuinely cannot be supported by the source material, it is **omitted from the document body** (never written as a gap, placeholder, or note). Instead, it is reported in the job output's optional `uncoveredPoints` array. The API folds those points into the proposal's `rationale` so the reviewer sees what could not be covered, while the document itself remains clean and factual. This behaviour is shared with the gap-drafting pipeline and enforced by the same factual-register contract.
 
 Embedding of the new content happens when you trigger a re‑index of the flow (e.g. `POST /api/knowledge/repositories/index`). The indexed sections are then chunked and embedded inline by the API (the API holds the embedding provider). There is no special priority or separate embedding pass for seeds.
 
@@ -70,7 +86,7 @@ Embedding of the new content happens when you trigger a re‑index of the flow (
 
 1. **Identify what to seed** – either a topic (for outline generation) or a set of explicit items.
 2. **Optionally generate an outline** – call `POST /api/flows/:flowId/outline` to get a machine‑proposed list of items. The proposed list is available by polling the returned job id via `GET /api/jobs/:id/wait`.
-3. **Review and edit the outline** – ensure the proposed items match your intent.
+3. **Review and edit the outline** – ensure the proposed items match your intent. You can also add or remove documents, adjust `targetPath`, and supply `questions` for extra context.
 4. **Submit the seed** – call `POST /api/flows/:flowId/seed` with your final `items` array.
 5. **Wait for drafting to complete** – the API returns enqueued job ids. Poll `GET /api/jobs/:id/wait` for each job until it finishes.
 6. **Inspect the resulting proposal** – read the proposal via `GET /api/proposals` or in the web console.
@@ -88,7 +104,8 @@ Embedding of the new content happens when you trigger a re‑index of the flow (
 
 ## Tips for Effective Seeding
 
-- **Use clear titles and headings** – the title becomes part of the file name (e.g. `<title-slug>.md`) and helps retrieval rank the document higher for relevant queries.
+- **Use clear titles and headings** – the title becomes part of the file name (e.g. `<title-slug>.md`) and helps retrieval rank the document higher for relevant queries. Use `targetPath` when you need explicit control over the file path.
+- **Supply motivating questions** – the optional `questions` field on each seed item provides context to the drafter, helping it focus the document on the scenarios that matter most.
 - **Structure documents for retrieval** – break content into well‑named sections with `##` headings. The Markdown parser splits documents by heading, producing sections that can be independently retrieved. Good structure means the right section answers the right question.
 - **Balance breadth and depth** – a seed that covers a topic broadly but lacks detail may produce shallow answers. Conversely, a very deep document on a narrow topic may be missed for broader queries. Strike a balance that matches expected usage.
 
