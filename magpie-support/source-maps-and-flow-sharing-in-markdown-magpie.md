@@ -101,4 +101,4 @@ The source map is strictly internal metadata for agent navigation. It never ente
   - `paths`: 1 to 8 entries, each max 260 characters.
   - `description`: max 240 characters.
 - **Consensus cap**: Maximum consensus count of 5 (`MAX_CONSENSUS_COUNT` in `apps/api/src/stores/source-map-consensus.ts`).
-- **Storage backend**: Defaults to Postgres; can be overridden with `SOURCE_MAP_STORE` environment variable (see `docs/ai-jobs.md` → Storage).
+- **Storage backend**: Defaults to memory; can be overridden with `SOURCE_MAP_STORE` environment variable (see `docs/ai-jobs.md` → Storage).
