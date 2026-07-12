@@ -36,4 +36,4 @@ The MCP server does not expose keyboard shortcuts; all interaction is programmat
 
 ## Contributing
 
-Pitch deck shortcuts are implemented in `scripts/build-deck.mjs`; Escape-to-close-modal is handled in the modal components under `apps/web/src/components/`. Contributions are welcome via pull requests.
+Pitch deck shortcuts are defined inline in the generated HTML's JavaScript; Escape-to-close is implemented via keydown event handlers in the modal components themselves. Contributions are welcome via pull requests.
