@@ -28,7 +28,7 @@ As an additional security control, the watcher process has no direct access to t
 
 The HTTP API (port 4000) currently delegates permission decisions to the application layer. In the current implementation:
 
-- When authentication is enabled (the default), all API endpoints require a valid bearer token. In addition, some endpoints enforce scoped authorization – for example, `POST /api/gaps/clusters/:id/proposal` requires the `manage:knowledge` scope. The `POST /api/admin/reset` endpoint is documented as unauthenticated and destructive; it must not be exposed in production.
+- When authentication is enabled (the default), all API endpoints require a valid bearer token. In addition, some endpoints enforce scoped authorization – for example, `POST /api/gaps/clusters/:id/proposal` requires the `manage:knowledge` scope. The `POST /api/admin/reset` endpoint requires both the `manage:admin` scope and the `admin` capability (assertCan), contradicting earlier documentation which described it as unauthenticated and destructive; it must not be exposed in production.
 - The API owns the “permissions, retrieval orchestration, proposal creation, and review workflow”, and concrete permission checks have been implemented for several operations (e.g., proposal-from-cluster). More scoped checks are planned.
 - Planned improvements include additional role‑based access for team members, e.g., `read:knowledge`, `write:knowledge`, `manage:settings`. These will be enforced at the API boundary using the `@magpie/auth` middleware as the auth model evolves.
 
@@ -36,7 +36,7 @@ The HTTP API (port 4000) currently delegates permission decisions to the applica
 
 CORS is open by default (`access-control-allow-origin: *`); `OPTIONS` preflight requests return `204`. For production deployments, set `CORS_ALLOWED_ORIGINS` to a comma-separated allow-list (e.g. the web console origin) to restrict which origins may call the API.
 
-Every API response carries standard security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, and `Strict-Transport-Security`. HSTS is only honoured by browsers over HTTPS; TLS termination is assumed to happen upstream. The same headers are emitted by the MCP HTTP server and the web app.
+Every API response carries standard security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, and `Strict-Transport-Security`. HSTS is only honoured by browsers over HTTPS; TLS termination is assumed to happen upstream. The same headers are emitted by the MCP HTTP server and the web app. The web app configures its own security headers via its `next.config.mjs` async headers function.
 
 ## MCP Server Access Control (Granular Permissions)
 
