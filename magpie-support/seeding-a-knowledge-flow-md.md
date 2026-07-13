@@ -17,21 +17,27 @@ Seeding is not meant to replace the evolutionary gap pipeline; it is a deliberat
 
 ## How to Configure a Seed Source
 
-Seeding is configured via the API rather than environment variables. The primary endpoint is:
+Seeding is configured via the API and is **plan-centric**. Instead of submitting raw items directly, you first propose a plan and then approve it. The primary endpoint to propose a plan is:
 
 ```http
-POST /api/flows/:flowId/seed
+POST /api/flows/:flowId/outline
 Content-Type: application/json
 
 {
-  "items": [
-    { "title": "Billing overview", "coverage": ["what billing is", "the plans"] },
-    { "coverage": ["refund policy", "how to request a refund"] }
-  ]
+  "notes": "optional steer for this run"
 }
 ```
 
-Each *item* has an optional `title`, an optional `targetPath` (an explicit destination-relative path such as `billing/overview.md`), a required `coverage` array of points the document should cover, and an optional `questions` array of motivating questions/prompts that give the drafter context. When a title is omitted, one is generated automatically. When a `targetPath` is given, the drafted document is written to that exact path rather than deriving one from the title.
+This triggers an `outline_flow_seed` AI job that proposes a list of documents grounded in the flow's source repositories and existing documentation. **There is no topic** — the planning agent explores the flow's sources and plans the whole flow, scoped by the flow's charter when configured. The endpoint requires the `manage:jobs` scope (and `manage` on the target flow) and returns the enqueued job id.
+
+On completion, the API persists a **seed plan** (`SeedPlan`, status `proposed`) containing proposed items, a rationale, and an optional proposed charter/persona. You can review the plan via:
+
+```http
+GET /api/flows/:flowId/seed-plans
+GET /api/seed-plans/:id
+```
+
+Each item has an optional `title`, an optional `targetPath` (an explicit destination-relative path such as `billing/overview.md`), a required `coverage` array of points the document should cover, and an optional `questions` array of motivating questions/prompts that give the drafter context. When a title is omitted, one is generated automatically. When a `targetPath` is given, the drafted document is written to that exact path rather than deriving one from the title.
 
 The schema for each item is:
 
@@ -42,36 +48,47 @@ The schema for each item is:
 | `coverage` | string[] | yes (≥1) | Points the document must cover |
 | `questions` | string[] | no | Motivating questions for the drafter |
 
-To **generate an outline** first (instead of writing items by hand), use:
+To **edit the plan** before approving (adjust items, charter, or persona), use:
 
 ```http
-POST /api/flows/:flowId/outline
+PATCH /api/seed-plans/:id
 Content-Type: application/json
 
 {
-  "topic": "Refund handling",
-  "notes": "focus on partial refunds"
+  "items": [
+    { "id": "item-id", "title": "Billing overview", "coverage": ["what billing is", "the plans"] }
+  ]
 }
 ```
 
-This triggers an `outline_flow_seed` AI job that proposes a list of items grounded in the flow's existing documentation. The API grounds the job by retrieving the closest destination sections for the topic using inline embeddings (the same mechanism the gap reconciler uses for scope grounding) and passes them as context along with the flow persona — so the model proposes documents that fit the current structure and avoid restating what is already covered. The job returns `{ items: SeedItem[], rationale }`; it **only proposes** and drafts nothing. Its output is stored on the job record and can be read back via `GET /api/jobs/:id/wait`. There is no completion side-effect or new stored entity. The outline endpoint requires the `manage:jobs` scope (and `manage` on the target flow) and returns the enqueued job id.
+Editing is only allowed while the plan is `proposed`. To approve the plan and start drafting:
 
-You can then inspect the proposed outline and use it as the basis for your own seed call.
+```http
+POST /api/seed-plans/:id/approve
+```
 
-Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable – that variable is used to define the git or local paths that the flow indexes for ongoing operations. Seeds are not passed as inline content; instead, the job carries references to the flow's configured sources (`SourceDescriptor[]`), which the watcher resolves to traversable workspaces and lets the agent explore directly. Both the seed and outline endpoints require the `manage:jobs` scope and `manage` on the target flow; they return the enqueued job ids.
+This flips the plan to `approved` and enqueues one `draft_seed_document` AI job per non-dismissed item, returning `{ "plan": SeedPlan, "jobIds": string[] }`. To reject a plan without drafting:
+
+```http
+POST /api/seed-plans/:id/dismiss
+```
+
+Dismissal is sticky: the sparse-flow bootstrap will not re-propose a plan for the same flow until the flow's sources change.
+
+Seeding is *not* configured via the `KNOWLEDGE_SOURCES` environment variable – that variable is used to define the git or local paths that the flow indexes for ongoing operations. Seeds are not passed as inline content; instead, the job carries references to the flow's configured sources (`SourceDescriptor[]`), which the watcher resolves to traversable workspaces and lets the agent explore directly.
 
 ### MCP Tools
 
-The same seeding operations are available through the Markdown Magpie MCP server as the `kb_seed` and `kb_outline` tools. `kb_outline` (`apps/mcp/src/main.ts`) enqueues an `outline_flow_seed` job, waits for it to complete, and returns the proposed items plus rationale — the caller reviews, edits, and then passes the items to `kb_seed`. `kb_seed` is a thin wrapper over `POST /api/flows/:flowId/seed` that accepts a `flow` and `items` and returns the enqueued job ids. Both require the `manage:jobs` scope. The tool descriptions advise using `kb_outline` first to auto-generate items, then calling `kb_seed` with the reviewed list — keeping a human (or calling agent) in the loop between the two steps.
+The same seeding operations are available through the Markdown Magpie MCP server as the `kb_seed` and `kb_outline` tools. `kb_outline` (flow + optional `notes`) enqueues an `outline_flow_seed` job, waits for it to complete, and returns the **persisted plan** — `planId`, items, rationale, and proposed charter/persona with `charterProposed`/`personaProposed` flags. No items are drafted by `kb_outline`; it is a planning-only step. `kb_seed` accepts a **plan id** (from `kb_outline`'s `planId` or the console) and calls `POST /api/seed-plans/:id/approve`, returning the enqueued draft job ids. Both require the `manage:jobs` scope. The tool descriptions advise using `kb_outline` first to auto-generate a plan, then reviewing/editing it (in the console or via the API), and finally calling `kb_seed` with the plan id to approve it — keeping a human (or calling agent) in the loop between the two steps.
 
 ## How Seeding Integrates with Indexing and Embedding
 
-When you submit a seed, the API enqueues `draft_seed_document` AI jobs for each item. These jobs draft Markdown content grounded in the flow's source repositories, which the executing agent explores directly. All seed drafting jobs are processed asynchronously by the **watcher** process, which handles all generative AI work in the system. The API never performs chat or content generation inline — it enqueues the job and returns immediately. This means seed drafting will only complete if a watcher with the appropriate provider capability (matching `AI_PROVIDER`) is running and connected to the API. If no watcher is available, the jobs remain queued indefinitely. This pattern is consistent across all generative operations in Markdown Magpie.
+When a seed plan is approved, the API enqueues `draft_seed_document` AI jobs for each approved item. These jobs draft Markdown content grounded in the flow's source repositories, which the executing agent explores directly. All seed drafting jobs are processed asynchronously by the **watcher** process, which handles all generative AI work in the system. The API never performs chat or content generation inline — it enqueues the job and returns immediately. This means seed drafting will only complete if a watcher with the appropriate provider capability (matching `AI_PROVIDER`) is running and connected to the API. If no watcher is available, the jobs remain queued indefinitely. This pattern is consistent across all generative operations in Markdown Magpie.
 
 On completion, the API creates a **clusterless proposal** – a proposal that does not originate from a gap cluster. The proposal carries the flow's id first-class so the reconcile gate and per-flow outbox treat it as same-flow. It then passes through the shared reconcile gate:
 
 1. The proposal is stored with status `draft`.
-2. The reconcile gate (`reconcileSeedProposal` in `apps/api/src/scheduling/fold.ts`) checks whether an open proposal in the same flow already targets the same path. If so, the seed document is folded into that open proposal (a `fold_markdown_proposal` AI job merges the rival content into the survivor). Otherwise, or if the only overlap is an approved/non-touchable PR, the seed proposal self-publishes as its own PR.
+2. The reconcile gate (`reconcileSeedProposal`) checks whether an open proposal in the same flow already targets the same path. If so, the seed document is folded into that open proposal (a `fold_markdown_proposal` AI job merges the rival content into the survivor). Otherwise, or if the only overlap is an approved/non-touchable PR, the seed proposal self-publishes as its own PR.
 3. A human reviews it in the console (or via API) and changes its status to `ready`.
 4. The human triggers publication (`POST /api/proposals/:id/publish`), which pushes the document to a new branch (and optionally opens a pull request for git-backed destinations).
 5. After the pull request is merged (or the branch is accepted), the new content becomes part of the indexed knowledge base.
@@ -84,10 +101,10 @@ Embedding of the new content happens when you trigger a re‑index of the flow (
 
 ## Step-by-Step Process
 
-1. **Identify what to seed** – either a topic (for outline generation) or a set of explicit items.
-2. **Optionally generate an outline** – call `POST /api/flows/:flowId/outline` to get a machine‑proposed list of items. The proposed list is available by polling the returned job id via `GET /api/jobs/:id/wait`.
-3. **Review and edit the outline** – ensure the proposed items match your intent. You can also add or remove documents, adjust `targetPath`, and supply `questions` for extra context.
-4. **Submit the seed** – call `POST /api/flows/:flowId/seed` with your final `items` array.
+1. **Identify what to seed** – decide which documents the flow should contain.
+2. **Generate an outline plan** – call `POST /api/flows/:flowId/outline` to get a machine‑proposed list of items. The persisted plan is available by polling the returned job id via `GET /api/jobs/:id/wait`, then reading the plan via `GET /api/flows/:flowId/seed-plans`.
+3. **Review and edit the plan** – use `PATCH /api/seed-plans/:id` or the console to adjust items, charter, persona, or per-item status. Ensure the proposed documents match your intent.
+4. **Approve the plan** – call `POST /api/seed-plans/:id/approve` to enqueue one `draft_seed_document` job per non-dismissed item.
 5. **Wait for drafting to complete** – the API returns enqueued job ids. Poll `GET /api/jobs/:id/wait` for each job until it finishes.
 6. **Inspect the resulting proposal** – read the proposal via `GET /api/proposals` or in the web console.
 7. **Review and approve the proposal** – update its status to `ready` (`POST /api/proposals/:id/status { "status": "ready" }`).
@@ -117,4 +134,4 @@ Embedding of the new content happens when you trigger a re‑index of the flow (
 
 ## Summary
 
-Seeding in Markdown Magpie is a deliberate, human‑reviewed way to bootstrap knowledge bases. It uses an API‑driven workflow that drafts documents, creates proposals, and funnels them through the same review and publication pipeline as gap‑driven content. When used thoughtfully – with clear topics, balanced scope, and proper post‑merge indexing – seeding establishes a solid foundation for accurate, cited answers from day one.
+Seeding in Markdown Magpie is a deliberate, human‑reviewed way to bootstrap knowledge bases. It uses a plan-centric API workflow that proposes a seed plan, lets you review and edit it, then approves it to draft documents, creates proposals, and funnels them through the same review and publication pipeline as gap‑driven content. When used thoughtfully – with clear items, balanced scope, and proper post‑merge indexing – seeding establishes a solid foundation for accurate, cited answers from day one.
