@@ -6,7 +6,7 @@ tags: [getting-started, onboarding, indexing, quickstart]
 review_cycle_days: 90
 ---
 
-> **Note:** This guide consolidates content from the Quick Start and the Managing Knowledge Flows documents, which have been deprecated. For the most current instructions, refer to this guide.
+> **Note:** This guide consolidates content from the [Quick Start](quick-start.md) and the [Managing Knowledge Flows](managing-knowledge-flows-in-markdown-magpie.md) documents, which have been deprecated. For the most current instructions, refer to this guide. For a quick reference, see the [Quick Start (Legacy Reference)](quick-start.md) and the [Knowledge Flows Reference](managing-knowledge-flows-in-markdown-magpie.md).
 
 > **Architecture note:** Markdown Magpie uses a queue-only architecture for all generative (chat) AI work: the API never calls a chat model inline. It enqueues a job on a pg-boss queue in Postgres; a separate **watcher** process claims it, invokes the configured provider, and posts the result back over HTTP. Embeddings are the one exception — the API computes them inline (it holds an embedding provider) for indexing and query-time retrieval. The watcher is **required** for any generative work (answers, proposals, drafting, maintenance). Without a running watcher, `POST /api/ask` returns a 202 job that never completes.
 
@@ -34,7 +34,7 @@ This guide explains how to get your Markdown content into Markdown Magpie so it 
 
 > **Note:** Redis is **not required** for local development. The queue uses Postgres via pg-boss. The `QUEUE_URL` variable in `.env.example` is legacy and can be left blank. Docker Compose starts Postgres only by default; if you need Redis, add it to your compose file.
 
-If you haven't started the stack yet, follow the Local Development instructions in the repository's main README.
+If you haven't started the stack yet, follow the [Local Development](../README.md#local-development) instructions in the repo's main README.
 
 ## 1. Clone and Install
 
@@ -200,7 +200,12 @@ curl localhost:4000/api/health
 The watcher must be running for any generative AI work (answering questions, drafting proposals, publishing, and maintenance jobs). Start it in a separate terminal:
 
 ```bash
-AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
+# Clear the M2M creds so it talks to the local API with no auth header, and
+# OVERRIDE API_BASE_URL — the committed .env points it at the PRODUCTION API,
+# so without the override the watcher silently polls prod and 401s every claim
+# while local jobs sit queued forever.
+API_BASE_URL=http://localhost:4000 \
+  AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 ```
 
@@ -227,7 +232,8 @@ Note: A watcher with `github` credentials also satisfies `local-git` (it has git
 > **Important for maintenance jobs:** Markdown Magpie includes maintenance orchestrators — such as gap‑closure verification (`verify_gap_closure`), patrol tidying, and the gap reconciler — that claim a watcher and then *block* while waiting on follow‑up AI jobs they enqueued. Because a watcher runs **one job at a time**, those follow‑ups can only be picked up by a **second** watcher. With a single watcher the orchestration self‑starves and times out. The console warns when only one watcher is connected. For local development with maintenance features, start a second watcher in another terminal:
 >
 > ```bash
-> AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
+> API_BASE_URL=http://localhost:4000 \
+>   AUTH_REQUIRED=false WATCHER_API_CLIENT_ID= WATCHER_API_CLIENT_SECRET= \
 >   MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts" npm run dev:watcher
 > ```
 
@@ -380,20 +386,20 @@ The MCP endpoint is at `http://localhost:4001/mcp`. The server also exposes a he
 | `kb_ask` | Ask a question and get a cited answer from the knowledge base. | `ask:knowledge` |
 | `kb_feedback` | Flag an answer as helpful, unhelpful, or a knowledge gap. | `feedback:questions` |
 | `kb_flows` | List the knowledge flows a question can be routed to. | `read:knowledge` |
-| `kb_outline` | Propose a seed plan (list of documents to author) for a flow, grounded in the flow's source repositories. | `manage:jobs` |
-| `kb_seed` | Approve a seed plan — drafts one document per approved item straight into proposals. | `manage:jobs` |
+| `kb_outline` | Propose a seed outline (list of documents to author) for a topic, grounded in a flow's existing docs. | `manage:jobs` |
+| `kb_seed` | Seed a flow with initial content: draft documents straight into proposals, skipping the gap pipeline. | `manage:jobs` |
 
-For authentication details, per-tool scopes, and client setup instructions (Claude Code, Claude Desktop, VS Code, Cursor, Continue), see the MCP Server Reference.
+For authentication details, per-tool scopes, and client setup instructions (Claude Code, Claude Desktop, VS Code, Cursor, Continue), see [docs/mcp.md](../docs/mcp.md).
 
 When `AUTH_REQUIRED=true`, the HTTP transport acts as an OAuth protected resource, validating inbound tokens against Auth0. The stdio transport presents `MCP_AUTH_TOKEN` to the API. Both fail fast at startup if required credentials are missing.
 
 ## 13. Bootstrap Content with Flow Seeding
 
-The fastest way to populate a new knowledge base is **flow seeding**: the system explores the flow's sources, proposes a document plan, and after your approval drafts each document straight into a proposal → pull request, bypassing the gap-clustering pipeline entirely. This is the recommended on-ramp for a new flow or a new area of knowledge (e.g. a new feature).
+The fastest way to populate a new knowledge base is **flow seeding**: you submit a list of documents to author (each a title plus the points it should cover), and the system drafts each one straight into a proposal → pull request, bypassing the gap-clustering pipeline entirely. This is the recommended on-ramp for a new flow or a new area of knowledge (e.g. a new feature).
 
 ### Proposing a Seed Plan
 
-Start by asking the system to propose a seed plan for your flow. The planning agent explores the flow's source repositories and proposes a complete, non-overlapping document plan fitted to the existing documents:
+For a more guided approach, ask the system to propose a seed plan for your flow. The planning agent explores the flow's source repositories and proposes a complete, non-overlapping document plan fitted to the existing documents:
 
 ```bash
 curl -X POST http://localhost:4000/api/flows/my-flow/outline \
@@ -405,9 +411,33 @@ curl -X POST http://localhost:4000/api/flows/my-flow/outline \
 
 There is **no topic** — the planning agent derives scope from the flow's sources and charter. The optional `notes` field provides freeform steer for this run. The endpoint enqueues a source-grounded `outline_flow_seed` job and returns `{ "ok": true, "jobId": "...", "reused": false }`. When the planning job completes, a seed plan (status `proposed`) is persisted for review.
 
+### Direct API Call
+
+If you already have a precise list of items, you can seed directly without the planning step:
+
+```bash
+curl -X POST http://localhost:4000/api/flows/my-flow/seed \
+  -H 'content-type: application/json' \
+  -d '{
+    "items": [
+      {
+        "title": "Billing overview",
+        "coverage": ["what billing is", "the available plans"]
+      },
+      {
+        "coverage": ["refund policy", "how to request a refund"]
+      }
+    ]
+  }'
+```
+
+Each item's `coverage` field (the points the document must cover) is required (≥1). `title` and `targetPath` are optional. An optional `questions` array supplies motivating prompts for context. The endpoint requires the `manage:jobs` scope and `manage` capability on the target flow.
+
+The API enqueues one `draft_seed_document` job per item and returns `{ "ok": true, "jobIds": [...] }`. Drafting is source-grounded: the executing agent explores the flow's source repositories (git/local/internet/agent) to find supporting material. Coverage points the sources do not support are omitted from the authored document and recorded on the proposal's rationale. On completion, each document is created as a clusterless proposal that goes through the same reconcile gate as gap drafts (folds into overlapping open PRs, or self-publishes as its own PR), so seeding still ends at a reviewable pull request.
+
 ### Review and Approve
 
-Review the proposed plan on the console's **Seed** page or via the API:
+If you used the plan-based approach, review the proposed plan on the console's **Seed** page or via the API:
 
 - `GET /api/flows/:flowId/seed-plans` — list plans for a flow (newest first).
 - `GET /api/seed-plans/:id` — fetch a plan's details (`{ "plan": SeedPlan }`).
@@ -423,16 +453,31 @@ This flips the plan to `approved` and enqueues one `draft_seed_document` job per
 
 Each draft is source-grounded: the executing agent explores the flow's source repositories (git/local/internet/agent) to find supporting material. Coverage points the sources do not support are omitted from the authored document and recorded on the proposal's rationale. Per-claim citations are returned in a structured `provenance` field and persisted on the proposal. On completion, each document is created as a clusterless proposal carrying the flow's id first-class and goes through the same reconcile gate as gap drafts (folds into overlapping open PRs on the same path, or self-publishes as its own PR), so seeding still ends at a reviewable pull request.
 
+### Generating the Outline
+
+If you do not have a precise list of items, you can let the system propose one based on a topic:
+
+```bash
+curl -X POST http://localhost:4000/api/flows/my-flow/outline \
+  -H 'content-type: application/json' \
+  -d '{
+    "topic": "Refund handling",
+    "notes": "focus on partial refunds"
+  }'
+```
+
+The API grounds the outline job in the flow's existing documents (retrieved inline for the topic) so the model proposes items that fit the current structure and do not restate what is already covered. The job returns `{ items: SeedItem[], rationale }`. It **only proposes** — nothing is drafted or seeded. Review and edit the returned items, then submit them via the seed endpoint above or the `kb_seed` MCP tool.
+
 ### Using the Web Console
 
-The console's **Seed page** drives the full workflow: pick a flow, optionally add steer notes, propose a seed plan, review and edit the proposed documents, then approve. The plan appears in the list below the form when the planning job completes. There is no topic field — the planning agent explores the flow's sources and plans the whole flow, scoped by the flow's charter when configured.
+The console's **Seed / add an area** page drives the full workflow: pick a flow, enter a topic, generate an outline, edit the proposed documents, then seed. See the Seed section in the sidebar at `http://localhost:3000/seed`.
 
 ### Using the MCP Tools
 
-The MCP server exposes `kb_outline` (proposes a plan for a flow, grounded in the flow's source repositories) and `kb_seed` (approves a plan by id). The typical two-step flow is:
+The MCP server exposes `kb_outline` (proposes documents for a topic, grounded in the flow's existing docs) and `kb_seed` (drafts the items straight into proposals). The typical two-step flow is:
 
-1. `kb_outline` with `{ "flow": "my-flow", "notes": "optional steer" }` — returns the persisted plan with `planId`, `items`, `rationale`, and optionally `charter`/`persona`.
-2. Review and optionally edit items in the console, then call `kb_seed` with `{ "plan": "<plan-id>" }`.
+1. `kb_outline` with `{ "flow": "my-flow", "topic": "Refund handling" }` — returns proposed `SeedItem[]`.
+2. Review and edit the items, then call `kb_seed` with `{ "flow": "my-flow", "items": [...] }`.
 
 This bypasses the need to write coverage points by hand.
 
@@ -523,7 +568,7 @@ When the gap detector finds missing knowledge, the recommended workflow is:
 
 #### Adding via Flow Seeding (recommended for new areas)
 
-To bootstrap a new area of knowledge — or an entire new flow — use the seed workflow described in [Section 13](#13-bootstrap-content-with-flow-seeding). Propose a plan, review, and approve; each item is drafted into a proposal → pull request, skipping the gap pipeline entirely.
+To bootstrap a new area of knowledge — or an entire new flow — use the seed workflow described in [Section 13](#13-bootstrap-content-with-flow-seeding). Each item is drafted into a proposal → pull request, skipping the gap pipeline entirely.
 
 ### Removing Documents
 
@@ -668,6 +713,7 @@ The patrol uses a rolling cursor: each tick picks the N least-recently-checked f
 | `/ask` returns low confidence even after indexing | Embedding pass not finished; retrieval mode is keyword | Wait for background embedding or configure hybrid retrieval |
 | Watcher logs `Capability … not ready` | Environment variables for the chosen provider are incorrect | Check provider env vars, see the table in step 2 |
 | `401` on API calls | Authentication enabled but no credentials | Set `AUTH_REQUIRED=false` in `.env` or as environment variable |
+| Watcher logs `POST /api/jobs/claim failed with 401` even though the local API has auth off | The watcher isn't talking to your API at all: `.env`'s `API_BASE_URL` points at the production deployment | Override `API_BASE_URL=http://localhost:4000` (step 7). Verify with `curl -s localhost:4000/api/workers` — your watcher must appear. |
 | `MAGPIE_CHECKOUT_ROOT` not writable | Override not set | Use `MAGPIE_CHECKOUT_ROOT="$PWD/.magpie/checkouts"` before starting the API |
 | "local_path_not_allowed" error | Trying to index an arbitrary path without a configured flow | Use a flow ID defined in `KNOWLEDGE_FLOWS` |
 | Changes not reflected after re-index | Browser caching of search results | Use a cache-busting parameter or wait for TTL; re-query the API |
@@ -686,23 +732,23 @@ The patrol uses a rolling cursor: each tick picks the N least-recently-checked f
 
 ## Next Steps
 
-- Learn about knowledge gap detection and proposals.
-- Set up real AI providers instead of `mock`.
-- Configure hybrid retrieval with embeddings for improved answer quality.
-- Configure automated patrol maintenance for knowledge base tidying.
-- Review the permissions and access controls.
-- Review the Configuration Reference for comprehensive documentation of all environment variables.
-- Understand the architecture and job model.
-- Try the full Docker Compose stack for a self-contained demo.
-- Connect AI agents via the MCP server for direct knowledge base queries.
+- Learn about [knowledge gap detection and proposals](managing-knowledge-flows-in-markdown-magpie.md#the-gap-pipeline-and-flows).
+- Set up [real AI providers](integrations-and-connecting-data-sources.md#ai-provider-integrations) instead of `mock`.
+- Configure [hybrid retrieval with embeddings](configuration-reference.md#embedding-provider-configuration) for improved answer quality.
+- Configure automated [patrol maintenance](managing-knowledge-flows-in-markdown-magpie.md#patrol-maintenance-scheduled-knowledge-base-tidying) for knowledge base tidying.
+- Review the [permissions and access controls](permissions-and-access-controls-in-markdown-magpie.md).
+- Review the [Configuration Reference](configuration-reference.md) for comprehensive documentation of all environment variables.
+- Understand the [architecture and job model](architecture.md).
+- Try the [full Docker Compose stack](README.md#docker-compose) for a self-contained demo.
+- Connect AI agents via the [MCP server](docs/mcp.md) for direct knowledge base queries.
 
 ---
 
 **References**
-- Repository README – full local development instructions.
-- Markdown Ingestion guide – detailed source/destination/flow configuration.
-- HTTP API Reference – all API endpoints for indexing and searching.
-- Architecture document – high-level system design and provider strategy.
-- Configuration Reference – comprehensive documentation of all environment variables.
-- MCP Server Reference – MCP transports, tools, auth, and client setup.
-- AI Job Contract – queued AI jobs, seeding, and the watcher model.
+- [Repository README](../../README.md) – full local development instructions.
+- [Markdown Ingestion](managing-knowledge-flows-in-markdown-magpie.md) – detailed source/destination/flow configuration.
+- [HTTP API Reference](managing-knowledge-flows-in-markdown-magpie.md#api-endpoints) – all API endpoints for indexing and searching.
+- [Architecture](managing-knowledge-flows-in-markdown-magpie.md) – high-level system design and provider strategy.
+- [Configuration Reference](configuration-reference.md) – comprehensive documentation of all environment variables.
+- [MCP Server Reference](docs/mcp.md) – MCP transports, tools, auth, and client setup.
+- [AI Job Contract](docs/ai-jobs.md) – queued AI jobs, seeding, and the watcher model.
