@@ -355,7 +355,7 @@ Open `http://localhost:3000` to browse the knowledge base, view questions, and m
 
 ## 12. (Optional) Run the MCP Server
 
-The MCP server (`@magpie/mcp`) lets AI agents and MCP-aware clients query the knowledge base through tools such as `kb_ask`, `kb_search`, `kb_feedback`, `kb_flows`, `kb_outline`, and `kb_seed`. It is a thin client over the HTTP API — it holds no state and proxies every request to the API at `API_BASE_URL`. The API and a watcher must be running before `kb_ask` can answer questions.
+The MCP server (`@magpie/mcp`) lets AI agents and MCP-aware clients query the knowledge base through tools such as `kb_ask`, `kb_search`, `kb_citation`, `kb_feedback`, `kb_flows`, `kb_outline`, and `kb_seed`. It is a thin client over the HTTP API — it holds no state and proxies every request to the API at `API_BASE_URL`. The API and a watcher must be running before `kb_ask` can answer questions.
 
 ### stdio Transport (local subprocess)
 
@@ -383,7 +383,8 @@ The MCP endpoint is at `http://localhost:4001/mcp`. The server also exposes a he
 | Tool | Description | Required scope |
 |------|-------------|----------------|
 | `kb_search` | Search indexed Markdown sections by keyword. | `read:knowledge` |
-| `kb_ask` | Ask a question and get a cited answer from the knowledge base. | `ask:knowledge` |
+| `kb_citation` | Fetch the full content of cited knowledge-base sections so the evidence behind an answer can be shown. | `read:knowledge` |
+| `kb_ask` | Ask a question and get a cited answer from the knowledge base. Accepts an optional `flow` parameter. When `flow` is `"auto"` (default) the question is routed normally; otherwise it must be a flow id from `kb_flows`. If the router cannot determine a flow, the response includes `flowSelectionRequired` with the available flows – call `kb_ask` again with `flow` set to one of those ids. | `ask:knowledge` |
 | `kb_feedback` | Flag an answer as helpful, unhelpful, or a knowledge gap. | `feedback:questions` |
 | `kb_flows` | List the knowledge flows a question can be routed to. | `read:knowledge` |
 | `kb_outline` | Propose a seed outline (list of documents to author) for a topic, grounded in a flow's existing docs. | `manage:jobs` |
