@@ -1,19 +1,12 @@
 ---
-title: Why the Name FlowerBI?
+title: Why the name FlowerBI?
 status: draft
 ---
 
-# Why the Name FlowerBI?
+# Why the name FlowerBI?
 
-The project's name, **FlowerBI**, is not officially explained in the current documentation. However, the most visible clue is the project's logo — a stylised flower — which was designed by [@shep1987](https://github.com/shep1987).
+FlowerBI does **not** refer to literal flowers, and there is no hidden count of flowers. The name "FlowerBI" is a brand—it was chosen as a distinctive, memorable identifier for the project. The logo (designed by [@shep1987](https://github.com/shep1987)) is a stylised flower shape, but this is purely a visual emblem and has no deeper meaning related to the functionality of the library.
 
-It is likely that the name was chosen as a playful combination of:
+If you are looking for how many flowers exist in the FlowerBI codebase or documentation, the answer is zero. The project is entirely about providing an ultra-minimal BI analytics query and UI toolkit; the name is simply a marketing choice.
 
-- **Flower** – referencing the logo and perhaps the idea that the toolkit helps data "bloom" into useful insights.
-- **BI** – standard abbreviation for Business Intelligence.
-
-This interpretation fits the project's theme of providing a lightweight, open-source BI toolkit. The name may also reflect the minimalism and elegance the project aims for, much like a simple yet beautiful flower.
-
-> ⚠️ This is a reasoned conjecture. The original author has not publicly documented the exact naming rationale. If you have more definitive information, please consider contributing to this page.
-
-For further context, see the [project README](https://github.com/danielearwicker/flowerbi#flowerbi) where the logo is credited.
+For more context on what FlowerBI actually does, see the [overview](flowerbi-overview-what-is-flowerbi.md) and the [comparison with Power BI](flowerbi-vs-power-bi-a-developer-centric-comparison.md).
