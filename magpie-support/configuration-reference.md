@@ -22,7 +22,7 @@ Configure the flow pipeline via these environment variables:
 | `KNOWLEDGE_DESTINATIONS` | JSON array of destination objects (writable Git repos). | `[{"id":"my-dest","name":"My KB","url":"...","subpath":"docs"}]` |
 | `KNOWLEDGE_FLOWS` | JSON array of flow objects linking source IDs to a destination ID. | `[{"id":"myflow","sourceIds":["my-repo"],"destinationId":"my-dest"}]` |
 | `MAGPIE_CHECKOUT_ROOT` | Local directory for cloned repositories. Production default is `/data/checkouts`; override locally (e.g., `.magpie/checkouts`). | `.magpie/checkouts` |
-| `STORAGE_BACKEND` | Backend for indexed knowledge (see also the Storage Backend section). Either `postgres` (recommended) or `memory`. | `postgres` |
+| `STORAGE_BACKEND` | Backend for indexed knowledge (see also the Storage Backend section). Either `memory` (default) or `postgres`. | `memory` |
 | `DATABASE_URL` | Postgres connection string (required when `STORAGE_BACKEND=postgres`). | `postgres://user:pass@localhost:5432/magpie` |
 
 For backward compatibility, `KNOWLEDGE_REPOSITORIES` and `KNOWLEDGE_REPO_PATH` are still supported when the new variables are not set.
@@ -92,7 +92,7 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 
 Embeddings require `STORAGE_BACKEND=postgres` and a live `DATABASE_URL`. The model must output 1536‑dimensional vectors.
 
-Note: `EMBEDDING_PROVIDER` is an informational variable only — it is surfaced in `/api/config` for display and does not enable embeddings. Setting embedding credentials is what activates them.
+Note: The embedding provider is automatically detected from the presence of credential variables — setting `OPENAI_COMPATIBLE_EMBEDDING_MODEL` (plus base URL and API key) or the Azure OpenAI endpoint/key/deployment trio activates embeddings. There is no separate `EMBEDDING_PROVIDER` environment variable; the detected provider name is reported in `/api/config`.
 
 ## Job Queue Configuration
 
@@ -107,7 +107,7 @@ All AI chat/generative work is enqueued to a pg‑boss queue in Postgres. The AP
 | `AI_MAX_INFLIGHT_JOBS` | Global ceiling on concurrent in‑flight AI jobs. New AI work is rejected at enqueue with 429 once this many are already running. | 20 |
 | `AI_INTERACTIVE_RESERVED_JOBS` | In‑flight slots reserved for interactive AI jobs (e.g., answers, flow outlines). An interactive enqueue is rejected only when both the reserve is full and the global ceiling is reached. Set to 0 to disable the reserve; values above the ceiling are clamped to the ceiling. | 5 |
 
-Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑boss uses Postgres as its queue backend.
+The job queue uses pg‑boss backed by Postgres via `DATABASE_URL`. There is no separate queue URL or Redis support.
 
 **Note on watcher scaling:** Maintenance orchestrator jobs (e.g., gap-closure verification, patrols) require **at least two running watchers**. A maintenance job claims one watcher and then blocks inside an API callback while it waits on follow-up AI jobs. A single watcher cannot claim those follow-ups, so the work self-starves and times out. Run two watcher processes in production to avoid this. The console warns when only one watcher is connected.
 
@@ -115,10 +115,10 @@ Set `QUEUE_URL` to configure Redis (optional) for the job queue; otherwise pg‑
 
 | Backend | Variable | Value |
 |---|---|---|
-| Postgres (default) | `STORAGE_BACKEND` | `postgres` |
-| In‑memory (fallback) | `STORAGE_BACKEND` | `memory` |
+| In‑memory (default) | `STORAGE_BACKEND` | `memory` |
+| Postgres (production) | `STORAGE_BACKEND` | `postgres` |
 
-For Postgres, also set `DATABASE_URL` as above. Redis is optional and used only for job queuing (set `QUEUE_URL` if needed).
+For Postgres, also set `DATABASE_URL` as above. The job queue always uses pg‑boss over Postgres — there is no Redis configuration path.
 
 ## Version Control Integration (Pull Requests)
 
@@ -176,12 +176,17 @@ For local development, override `AUTH_REQUIRED=false` and clear the watcher M2M 
 
 ## MCP Server Configuration
 
-The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess, entrypoint `apps/mcp/src/main.ts`) and `streamable-http` (persistent HTTP, entrypoint `apps/mcp/src/http.ts`). Configure via:
+The MCP server (`apps/mcp`) supports two transports: `stdio` (launched as subprocess, entrypoint `apps/mcp/src/main.ts`) and `streamable-http` (persistent HTTP, entrypoint `apps/mcp/src/http.ts`). Transport is selected by entrypoint, not by an environment variable. Configure via:
 
 ```env
-MCP_TRANSPORT=stdio  # or streamable-http
-MCP_PORT=4001        # port for HTTP transport (default 4001)
 API_BASE_URL=http://localhost:4000  # base URL of the Markdown Magpie API
+```
+
+For the HTTP transport, these additional variables apply:
+
+```env
+MCP_HTTP_PORT=4001        # port for HTTP transport (default 4001)
+MCP_HTTP_HOST=127.0.0.1   # host interface to bind to
 ```
 
 When HTTP transport is used, per‑tool OAuth scopes are enforced:
@@ -191,6 +196,8 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 | `kb_search` | `read:knowledge` |
 | `kb_ask` | `ask:knowledge` |
 | `kb_feedback` | `feedback:questions` |
+| `kb_outline` | `manage:jobs` |
+| `kb_seed` | `manage:jobs` |
 
 ## Deployment Configuration
 
@@ -198,7 +205,7 @@ When HTTP transport is used, per‑tool OAuth scopes are enforced:
 |---|---|
 | Docker Compose | Use `docker compose up`; application containers require `profile=app`. Set `MAGPIE_CHECKOUT_ROOT` to a writable path (production default `/data/checkouts` is used in the Docker image; override locally). |
 | Azure Container Apps | See `infra/azure/README.md`. |
-| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres/Redis. For web development, set `MAGPIE_DEV_API_PROXY=http://localhost:4000` so the web dev server proxies API requests. Override `MAGPIE_CHECKOUT_ROOT` to a writable local path (e.g., `.magpie/checkouts`) to avoid the production default. |
+| Local (npm) | `npm run dev:api` and `npm run dev:web` with Docker for Postgres. For web development, set `MAGPIE_DEV_API_PROXY=http://localhost:4000` so the web dev server proxies API requests. Override `MAGPIE_CHECKOUT_ROOT` to a writable local path (e.g., `.magpie/checkouts`) to avoid the production default. |
 
 The default production shape is Docker Compose.
 
